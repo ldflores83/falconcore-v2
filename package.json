@@ -1,0 +1,18 @@
+{
+  "name": "falconcore-v2",
+  "version": "1.0.0",
+  "description": "Núcleo modular de Falcon Core v2: infraestructura cloud, autenticación, automatización y copilotos personales.",
+  "main": "functions/index.js",
+  "engines": {
+    "node": "18"
+  },
+  "scripts": {
+    "start": "firebase emulators:start",
+    "deploy": "firebase deploy --only functions"
+  },
+  "dependencies": {
+    "firebase-admin": "^11.10.1",
+    "firebase-functions": "^4.4.1",
+    "googleapis": "^133.0.0"
+  }
+}
