@@ -4,15 +4,15 @@
 // Aquí se registran y exportan todas las funciones disponibles en el backend.
 // Modular y escalable. Cada módulo se importa desde su carpeta correspondiente.
 
-// 📦 Importamos funciones de módulos
-const { oauthLogin } = require('./auth/oauth_handler');
+// 🍰 Importamos funciones de módulos
+import { oauthLogin } from './auth/oauth_handler.js';
 
-// 🧠 Firebase Functions SDK
-const functions = require('firebase-functions');
+// 🚀 Firebase Functions SDK
+import functions from 'firebase-functions';
 
-// 🚀 Exportamos función HTTP pública para iniciar login OAuth
-exports.oauthLogin = functions.https.onRequest(oauthLogin);
+// 🌈 Exportamos funciones HTTP públicas
+export const oauthLoginFn = functions.https.onRequest(oauthLogin);
 
-// 👉 En el futuro agregaremos más funciones como:
-// exports.createReport = functions.https.onCall(createReport);
-// exports.syncDrive = functions.pubsub.schedule('every 24 hours').onRun(syncDrive);
+// Importar getLogs
+import { getLogs as getLogsHandler } from './getLogs.js';
+export const getLogs = functions.https.onRequest(getLogsHandler);

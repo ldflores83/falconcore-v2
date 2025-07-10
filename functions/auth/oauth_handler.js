@@ -4,7 +4,7 @@
 // Genera una URL de autorización para que el usuario otorgue acceso.
 // En el Sprint 1 también manejaremos el callback (code -> access_token).
 
-const { google } = require('googleapis');
+import { google } from 'googleapis';
 
 // 📎 Valores de configuración (temporal: luego irá desde Firestore o config segura)
 const CLIENT_ID = 'TU_CLIENT_ID_AQUÍ';
@@ -19,7 +19,7 @@ const oauth2Client = new google.auth.OAuth2(
 );
 
 // 🔗 Función que genera y responde con la URL de login
-const oauthLogin = (req, res) => {
+export const oauthLogin = (req, res) => {
   const authUrl = oauth2Client.generateAuthUrl({
     access_type: 'offline',
     scope: [
@@ -32,9 +32,4 @@ const oauthLogin = (req, res) => {
   });
 
   res.status(200).send(`🔐 Inicia sesión con Google: <a href="${authUrl}">Login</a>`);
-};
-
-// 🚀 Exportamos la función
-module.exports = {
-  oauthLogin
 };
