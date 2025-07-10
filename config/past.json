@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "falconcore-v2",
+  "private_key_id": "496f9ae4678c6012642989e68af6ebb38d6ff046",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQCsuZ5A20YnW5qr\nHewRZDQTRypwpQdwVIeFxAp+6QCJe2muUT5TVaD7U0VqUitJeg0lCV9NMqCa2aph\nS5xOItAbvvXAVnV+olsgyGTLyZHnQaRZlqQUcV7NZM4V4k/sRjpDEKv3d8kperMh\nDGBOo+l5lJF+k5k7JTNWzyOpJMns3SeEqSo93Fp3+3cxbVKmaAVl5rhSlBkVkm7U\nfN74ZYImByjc06LZ/dMIOLHs96YQpXW/5qMfeRXOCVYOSuPgPio8QIIfLYFCOb5I\nbz8omGXJysO/nzTICGkVGpl8Wciacj2sizrT4MRAPESMOiZhnJ15fazfEYj6ASF/\ncRaZA1mHAgMBAAECggEAHmpXRDt4qJCYdV6BBfT7uJNVFV3yJ+Uysir54Cw+lHcf\nfns++uS+wtMAi77pcXhlHSr/1bO/FVWUC6sJXLcDp4cidlqjOQf0/RpcqYgWwb7M\n5pvAy/rEw21nXvIpucUKGGo0phC5Yy0AoyavRNnXULoJPt1V49Tiq/ww3uWkCyoC\nVQoOr+yFcFgcm7sCyGRWHwYGiAEc0BEM0F+CdJxiH/rXc3yPwE1E3zvBFR7BSZu9\nFzvEFqIC79pbCBVRLtKn3zILHmIFVtbq6exKIj1TNp3aZBbuIhmesJ+F0eGIS3K3\ngTd7nM2C4jPXfIu6s+djg3Mr67tzZ3p103dLJ+uhrQKBgQDdmbcbO7FQ+ZZT8fbw\nU0hS77Wz4EdgOTvWND0dJ72PtxzBHigKUrXO8Q4ce8efyPfLcfIps1SacNpQgcMD\nnqePPlQRJYOae6zKrBe1Po13SgC1b6YgxlMMqCF5G2O/EwQ2w+wARorKWnoEGEln\nRyvmbPs64zuEBgQAu8af0HkbjQKBgQDHiZ8GCTTd+WLdcToOzDd/uMUNfxLieLf1\nfBKp0l4g8UMgblt9F2b1AZRpH7EYzj0ET8byuyTm3VaIHjJ3bbPIU1zBtgOothuD\ntp++CC3K+YyFUvi6uG7m9m9W8HnD/I3wGzXDvv063bOS3UJidD7ADwMY0oMswvfJ\nSc1jVd76YwKBgQCAlY1WVBDTt7+u/hwX33t8BHQe5+kCwLMj3DQKEuE/3zTkKid5\ntfyhE+boSDrRUL/YYUnvQIu7Afjr9h++nfUEfVoyiN4QaesdvzYSiTV1Ho/CuAJh\nyjKuiXDC4U3DtbkgPhdXIZevS0i5z43oS7gBgQNWbDxAo2z3L/5VBZcAkQKBgQC0\nhhHVSCcIXEPRzEqWcLQVXXkJyNmxAz6LXgEUmzqF20C76pvjBHUlXJSEtyNmKdCS\nQgrgN+ge5kkPRSKrYhixOJpGtwGAdaFW/LZxGr0zUaqMRJC7fXj4hCQfJ9lCMw/H\nFxcBTZ2U0FdSm9Mfd8P9xpcqsenzaUD8X0TuhhYBuQKBgCGkn+r11tP5r3h06Iu8\nKtfs3SF7i/TMfrLjfQKb/gXIomWd3jA6Oik5b4Kqcsnot/kGHLSKIVVomsJ+7OiS\ndq8fhXabjxUyUk+Awya7c5fVJqAi9KqWcLThh+z8GBHq+N9ipLoUCsP9ZOvmAG24\nX8qgPfG0PiQ/s5NIok7fwiCN\n-----END PRIVATE KEY-----\n",
+  "client_email": "falconcore-access@falconcore-v2.iam.gserviceaccount.com",
+  "client_id": "106229407049500465162",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/falconcore-access%40falconcore-v2.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}
