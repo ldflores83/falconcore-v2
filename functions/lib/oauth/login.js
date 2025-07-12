@@ -14,7 +14,7 @@ const oauthLoginHandler = (req, res) => {
     let authUrl = '';
     switch (config.provider) {
         case 'google':
-            authUrl = (0, google_1.getGoogleAuthUrl)(config);
+            authUrl = (0, google_1.getGoogleAuthUrl)(config, projectId);
             break;
         case 'microsoft':
             authUrl = (0, microsoft_1.getMicrosoftAuthUrl)(config);
