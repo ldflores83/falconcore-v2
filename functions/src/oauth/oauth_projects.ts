@@ -14,6 +14,10 @@ export const OAUTH_CONFIG_BY_PROJECT: Record<string, OAuthConfig> = {
     client_id: process.env.CLIENT_ID!,
     client_secret: process.env.CLIENT_SECRET!,
     redirect_uri: process.env.REDIRECT_URI!,
-    scopes: ['https://www.googleapis.com/auth/drive.file'],
+    scopes: [
+      'https://www.googleapis.com/auth/drive',
+      'https://www.googleapis.com/auth/userinfo.email',
+      'https://www.googleapis.com/auth/userinfo.profile',
+    ],
   },
 };
