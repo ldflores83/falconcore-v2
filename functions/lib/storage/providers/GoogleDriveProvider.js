@@ -1,41 +1,26 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.GoogleDriveProvider = void 0;
+// /src/storage/providers/GoogleDriveProvider.ts
 const googleapis_1 = require("googleapis");
-const google_auth_library_1 = require("google-auth-library");
+const getOrCreateFolder_1 = require("../utils/getOrCreateFolder");
 class GoogleDriveProvider {
     constructor(accessToken) {
-        // Usa constructor directo de la clase, sin pasar por google.auth
-        this.oauthClient = new google_auth_library_1.OAuth2Client();
-        this.oauthClient.setCredentials({ access_token: accessToken });
+        const oauth2Client = new googleapis_1.google.auth.OAuth2();
+        oauth2Client.setCredentials({ access_token: accessToken });
+        this.drive = googleapis_1.google.drive({ version: 'v3', auth: oauth2Client });
     }
-    async createFolder(folderName) {
+    async createFolder(email, projectId) {
         try {
-            const drive = googleapis_1.google.drive({
-                version: 'v3',
-                auth: this.oauthClient,
-            });
-            const response = await drive.files.create({
-                requestBody: {
-                    name: folderName,
-                    mimeType: 'application/vnd.google-apps.folder',
-                },
-                fields: 'id',
-            });
-            const folderId = response.data.id;
-            console.log(`[Drive Debug] Carpeta creada: ${folderName}, ID: ${folderId}`);
-            return folderId;
+            const rootFolderName = `Root - ${email}`;
+            const rootFolderId = await (0, getOrCreateFolder_1.getOrCreateFolder)(this.drive, rootFolderName);
+            const projectFolderId = await (0, getOrCreateFolder_1.getOrCreateFolder)(this.drive, projectId, rootFolderId);
+            return projectFolderId;
         }
         catch (error) {
-            console.error('[Drive Error]', error); // log completo
+            console.error('[Drive Error]', error);
             throw new Error('Error al crear carpeta en Drive');
         }
-    }
-    async createFile(name, mimeType, content) {
-        throw new Error('createFile() no está implementado aún.');
-    }
-    async deleteFile(fileId) {
-        throw new Error('deleteFile() no está implementado aún.');
     }
 }
 exports.GoogleDriveProvider = GoogleDriveProvider;

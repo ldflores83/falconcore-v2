@@ -1,60 +1,68 @@
+// /src/oauth/callback.ts
 import { Request, Response } from 'express';
-import { google, oauth2_v2 } from 'googleapis';
+import { google } from 'googleapis';
 import { OAUTH_CONFIG_BY_PROJECT } from './oauth_projects';
 import { GoogleDriveProvider } from '../storage/providers/GoogleDriveProvider';
+import { saveTokensAndFolder } from '../storage/utils/saveTokens';
 
 export const oauthCallbackHandler = async (req: Request, res: Response): Promise<void> => {
   console.log('[OAuth Debug] Inició oauthCallbackHandler');
 
   try {
-    const { code, state } = req.query;
-    const project_id = state as string;
+    const code = req.query.code as string;
 
-    console.log('[OAuth Debug] Params recibidos:', { code, project_id });
+    /**
+     * Nota:
+     * Google OAuth retorna automáticamente el parámetro `state` en el callback.
+     * En nuestro caso, lo usamos como `project_id` para modularizar el contexto.
+     * Esto permite mantener una sola ruta de callback limpia para todos los MVPs.
+     */
+    const projectId = (req.query.project_id || req.query.state) as string;
 
-    const config = OAUTH_CONFIG_BY_PROJECT[project_id];
-    if (!config) {
-      res.status(400).json({ error: 'Invalid project_id' });
+    if (!code || !projectId) {
+      res.status(400).json({ error: 'Faltan parámetros: code o project_id' });
       return;
     }
 
-    const oauth2Client = new google.auth.OAuth2(
-      config.client_id,
-      config.client_secret,
-      config.redirect_uri
-    );
-
-    console.log('[OAuth Debug] Cliente OAuth2 creado');
-
-    const { tokens } = await oauth2Client.getToken(code as string);
-    oauth2Client.setCredentials(tokens);
-
-    console.log('[OAuth Debug] Tokens recibidos:', tokens);
-
-    const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
-    const userInfoResult = await oauth2.userinfo.get();
-    const userInfo: oauth2_v2.Schema$Userinfo = userInfoResult.data;
-
-    if (!userInfo.email) {
-      throw new Error('No se pudo obtener el email del usuario.');
+    const config = OAUTH_CONFIG_BY_PROJECT[projectId];
+    if (!config) {
+      res.status(400).json({ error: 'project_id inválido' });
+      return;
     }
 
-    const email = userInfo.email;
-    console.log('[OAuth Debug] Email del usuario:', email);
-
-    const provider = new GoogleDriveProvider(tokens.access_token!);
-    const folderId = await provider.createFolder(`Root - ${email}`);
-
-    console.log('[OAuth Debug] Carpeta creada, ID:', folderId);
-
-    res.json({
-      status: 'ok',
-      email,
-      folderId
+    const oauth2Client = new google.auth.OAuth2({
+      clientId: config.client_id,
+      clientSecret: config.client_secret,
+      redirectUri: config.redirect_uri,
     });
 
+    const { tokens } = await oauth2Client.getToken(code);
+    const accessToken = tokens.access_token;
+    if (!accessToken) {
+      res.status(400).json({ error: 'No se recibió access_token' });
+      return;
+    }
+
+    oauth2Client.setCredentials(tokens);
+    const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
+    const userInfo = await oauth2.userinfo.get();
+    const email = userInfo.data.email;
+    if (!email) {
+      res.status(400).json({ error: 'No se pudo obtener el email del usuario' });
+      return;
+    }
+
+    const driveProvider = new GoogleDriveProvider(accessToken);
+    const folderId = await driveProvider.createFolder(email, projectId);
+
+    await saveTokensAndFolder(email, projectId, {
+      access_token: accessToken,
+      refresh_token: tokens.refresh_token ?? undefined,
+    }, folderId);
+
+    res.status(200).json({ email, folderId });
   } catch (error: any) {
     console.error('[OAuth Error]', error);
-    res.status(500).json({ error: error.message || 'OAuth callback failed' });
+    res.status(500).json({ error: 'Error en el callback OAuth' });
   }
 };
