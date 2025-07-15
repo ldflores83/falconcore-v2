@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
-import { google } from 'googleapis';
-import fetch from 'node-fetch'; // Asegúrate de tenerlo en tu `package.json`
+import { google, oauth2_v2 } from 'googleapis';
 import { OAUTH_CONFIG_BY_PROJECT } from './oauth_projects';
+import { GoogleDriveProvider } from '../storage/providers/GoogleDriveProvider';
 
 export const oauthCallbackHandler = async (req: Request, res: Response): Promise<void> => {
   console.log('[OAuth Debug] Inició oauthCallbackHandler');
@@ -18,11 +18,6 @@ export const oauthCallbackHandler = async (req: Request, res: Response): Promise
       return;
     }
 
-    console.log('[OAuth Debug] Config obtenida:', {
-      client_id: config.client_id,
-      redirect_uri: config.redirect_uri,
-    });
-
     const oauth2Client = new google.auth.OAuth2(
       config.client_id,
       config.client_secret,
@@ -32,41 +27,34 @@ export const oauthCallbackHandler = async (req: Request, res: Response): Promise
     console.log('[OAuth Debug] Cliente OAuth2 creado');
 
     const { tokens } = await oauth2Client.getToken(code as string);
-    console.log('[OAuth Debug] Tokens obtenidos:', tokens);
+    oauth2Client.setCredentials(tokens);
 
-    oauth2Client.setCredentials({ access_token: tokens.access_token });
-    console.log('[OAuth Debug] Credenciales seteadas');
+    console.log('[OAuth Debug] Tokens recibidos:', tokens);
 
-    // 🔍 Hacemos llamada manual a userinfo con fetch + header
-    const userinfoResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-      headers: {
-        Authorization: `Bearer ${tokens.access_token}`,
-      },
-    });
+    const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
+    const userInfoResult = await oauth2.userinfo.get();
+    const userInfo: oauth2_v2.Schema$Userinfo = userInfoResult.data;
 
-    if (!userinfoResponse.ok) {
-      const errorData = await userinfoResponse.text();
-      console.error('[OAuth Debug] Error en userinfo:', userinfoResponse.status, errorData);
-      res.status(500).json({ error: 'Failed to fetch user info' });
-      return;
+    if (!userInfo.email) {
+      throw new Error('No se pudo obtener el email del usuario.');
     }
 
-    const userinfo = await userinfoResponse.json();
-    console.log('[OAuth Debug] Userinfo response:', userinfo);
+    const email = userInfo.email;
+    console.log('[OAuth Debug] Email del usuario:', email);
 
-    const userEmail = userinfo.email || 'unknown@email.com';
-    console.log('[OAuth Debug] Email del usuario:', userEmail);
+    const provider = new GoogleDriveProvider(tokens.access_token!);
+    const folderId = await provider.createFolder(`Root - ${email}`);
 
-    // 🔚 Por ahora solo regresamos info básica
-    res.status(200).json({
-      success: true,
-      email: userEmail,
-      tokens,
+    console.log('[OAuth Debug] Carpeta creada, ID:', folderId);
+
+    res.json({
+      status: 'ok',
+      email,
+      folderId
     });
 
   } catch (error: any) {
-    console.error('[OAuth Callback Error – Exception]:', error.message);
-    console.error('[OAuth Callback Error – Stack]:', error.stack);
-    res.status(500).json({ error: 'Internal server error during OAuth callback' });
+    console.error('[OAuth Error]', error);
+    res.status(500).json({ error: error.message || 'OAuth callback failed' });
   }
 };

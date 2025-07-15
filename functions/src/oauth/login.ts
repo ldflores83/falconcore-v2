@@ -26,4 +26,4 @@ export const oauthLoginHandler = (req: Request, res: Response): void => {
   }
 
   res.redirect(authUrl);
-};
+}

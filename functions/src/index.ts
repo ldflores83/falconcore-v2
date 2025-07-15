@@ -1,18 +1,22 @@
-import * as dotenv from 'dotenv';
-dotenv.config(); //lineas adicionales
-import * as functions from 'firebase-functions';
+import express from 'express';
+import cors from 'cors';
+import { setGlobalOptions } from 'firebase-functions/v2';
+import { onRequest } from 'firebase-functions/v2/https';
+
 import { oauthLoginHandler } from './oauth/login';
-import { oauthCallback } from './oauth/callback';
+import { oauthCallbackHandler } from './oauth/callback';
 
-export const oauthLogin = functions.https.onRequest(oauthLoginHandler);
+// 🌍 Config global para Gen 2 (puedes ajustar región si lo deseas)
+setGlobalOptions({ region: 'us-central1' });
 
-import { debugRedirect } from './debug/redirect';
+const app = express();
 
-export const debugRedirectFn = functions.https.onRequest((req, res) => {
-  debugRedirect(req, res);
-});
+// 🛡 Middlewares
+app.use(cors({ origin: true }));
 
+// 📌 Rutas limpias (sin /api porque ya están dentro de `api`)
+app.get('/oauthlogin', oauthLoginHandler);
+app.get('/oauthcallback', oauthCallbackHandler);
 
-export const oauthCallbackFn = functions.https.onRequest(async (req, res) => {
-  await oauthCallback(req, res);
-});
+// 🚀 Exporta como función Gen 2
+export const api = onRequest(app);

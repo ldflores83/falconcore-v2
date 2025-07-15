@@ -1,49 +1,45 @@
 "use strict";
-// src/oauth/callback.ts
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.oauthCallback = void 0;
+exports.oauthCallbackHandler = void 0;
+const googleapis_1 = require("googleapis");
 const oauth_projects_1 = require("./oauth_projects");
-const undici_1 = require("undici");
-const oauthCallback = async (req, res) => {
-    const projectId = req.query.state; // Aquí viene ahora el contexto
-    console.log('[OAuth Debug] state recibido (como projectId):', projectId);
-    const config = oauth_projects_1.OAUTH_CONFIG_BY_PROJECT[projectId];
-    if (!config) {
-        res.status(400).json({ error: 'Invalid project_id (from state)' });
-        return;
-    }
-    const { client_id, client_secret, redirect_uri } = config;
-    const code = req.query.code;
-    if (!code) {
-        res.status(400).json({ error: 'Missing authorization code' });
-        return;
-    }
-    console.log('[OAuth Debug] code:', code);
-    const tokenUrl = 'https://oauth2.googleapis.com/token';
-    const params = new URLSearchParams({
-        code,
-        client_id,
-        client_secret,
-        redirect_uri,
-        grant_type: 'authorization_code',
-    });
+const GoogleDriveProvider_1 = require("../storage/providers/GoogleDriveProvider");
+const oauthCallbackHandler = async (req, res) => {
+    console.log('[OAuth Debug] Inició oauthCallbackHandler');
     try {
-        const tokenRes = await (0, undici_1.fetch)(tokenUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: params.toString(),
-        });
-        const tokenData = await tokenRes.json();
-        if (tokenData.error) {
-            console.error('[OAuth Error]', tokenData);
-            res.status(400).json(tokenData);
+        const { code, state } = req.query;
+        const project_id = state;
+        console.log('[OAuth Debug] Params recibidos:', { code, project_id });
+        const config = oauth_projects_1.OAUTH_CONFIG_BY_PROJECT[project_id];
+        if (!config) {
+            res.status(400).json({ error: 'Invalid project_id' });
             return;
         }
-        res.json({ status: 'success', token: tokenData, project_id: projectId });
+        const oauth2Client = new googleapis_1.google.auth.OAuth2(config.client_id, config.client_secret, config.redirect_uri);
+        console.log('[OAuth Debug] Cliente OAuth2 creado');
+        const { tokens } = await oauth2Client.getToken(code);
+        oauth2Client.setCredentials(tokens);
+        console.log('[OAuth Debug] Tokens recibidos:', tokens);
+        const oauth2 = googleapis_1.google.oauth2({ version: 'v2', auth: oauth2Client });
+        const userInfoResult = await oauth2.userinfo.get();
+        const userInfo = userInfoResult.data;
+        if (!userInfo.email) {
+            throw new Error('No se pudo obtener el email del usuario.');
+        }
+        const email = userInfo.email;
+        console.log('[OAuth Debug] Email del usuario:', email);
+        const provider = new GoogleDriveProvider_1.GoogleDriveProvider(tokens.access_token);
+        const folderId = await provider.createFolder(`Root - ${email}`);
+        console.log('[OAuth Debug] Carpeta creada, ID:', folderId);
+        res.json({
+            status: 'ok',
+            email,
+            folderId
+        });
     }
-    catch (err) {
-        console.error('[OAuth Error]', err);
-        res.status(500).json({ error: 'Error exchanging code for token' });
+    catch (error) {
+        console.error('[OAuth Error]', error);
+        res.status(500).json({ error: error.message || 'OAuth callback failed' });
     }
 };
-exports.oauthCallback = oauthCallback;
+exports.oauthCallbackHandler = oauthCallbackHandler;

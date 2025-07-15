@@ -1,49 +1,22 @@
 "use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.oauthCallbackFn = exports.debugRedirectFn = exports.oauthLogin = void 0;
-const dotenv = __importStar(require("dotenv"));
-dotenv.config(); //lineas adicionales
-const functions = __importStar(require("firebase-functions"));
+exports.api = void 0;
+const express_1 = __importDefault(require("express"));
+const cors_1 = __importDefault(require("cors"));
+const v2_1 = require("firebase-functions/v2");
+const https_1 = require("firebase-functions/v2/https");
 const login_1 = require("./oauth/login");
 const callback_1 = require("./oauth/callback");
-exports.oauthLogin = functions.https.onRequest(login_1.oauthLoginHandler);
-const redirect_1 = require("./debug/redirect");
-exports.debugRedirectFn = functions.https.onRequest((req, res) => {
-    (0, redirect_1.debugRedirect)(req, res);
-});
-exports.oauthCallbackFn = functions.https.onRequest(async (req, res) => {
-    await (0, callback_1.oauthCallback)(req, res);
-});
+// 🌍 Config global para Gen 2 (puedes ajustar región si lo deseas)
+(0, v2_1.setGlobalOptions)({ region: 'us-central1' });
+const app = (0, express_1.default)();
+// 🛡 Middlewares
+app.use((0, cors_1.default)({ origin: true }));
+// 📌 Rutas limpias (sin /api porque ya están dentro de `api`)
+app.get('/oauthlogin', login_1.oauthLoginHandler);
+app.get('/oauthcallback', callback_1.oauthCallbackHandler);
+// 🚀 Exporta como función Gen 2
+exports.api = (0, https_1.onRequest)(app);

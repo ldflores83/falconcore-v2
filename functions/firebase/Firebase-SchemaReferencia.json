@@ -1,0 +1,17 @@
+{
+  "collections": {
+    "testproject_entries": {
+      "message": "string",
+      "created_at": "ISODate (string)",
+      "author": "string",
+      "purpose": "string"
+    },
+    "ideasync_entries": {
+      "prompt": "string",
+      "tags": ["string"],
+      "user_id": "string",
+      "created_at": "ISODate (string)",
+      "origin": "string"
+    }
+  }
+}
