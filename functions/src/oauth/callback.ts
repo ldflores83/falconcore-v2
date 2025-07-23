@@ -1,68 +1,60 @@
 // /src/oauth/callback.ts
+
 import { Request, Response } from 'express';
-import { google } from 'googleapis';
-import { OAUTH_CONFIG_BY_PROJECT } from './oauth_projects';
-import { GoogleDriveProvider } from '../storage/providers/GoogleDriveProvider';
-import { saveTokensAndFolder } from '../storage/utils/saveTokens';
+import { google, drive_v3 } from 'googleapis';
+import { providerFactory } from '../storage/utils/providerFactory';
+import {
+  exchangeCodeForTokens,
+  getUserInfoFromToken,
+  getOAuthClient
+} from './oauth_projects';
 
-export const oauthCallbackHandler = async (req: Request, res: Response): Promise<void> => {
-  console.log('[OAuth Debug] Inició oauthCallbackHandler');
-
+// 🎯 Handler que recibe la redirección después del login con Google
+export const oauthCallbackHandler = async (req: Request, res: Response) => {
   try {
     const code = req.query.code as string;
+    const projectId = req.query.state as string; // lo mandamos en login
 
-    /**
-     * Nota:
-     * Google OAuth retorna automáticamente el parámetro `state` en el callback.
-     * En nuestro caso, lo usamos como `project_id` para modularizar el contexto.
-     * Esto permite mantener una sola ruta de callback limpia para todos los MVPs.
-     */
-    const projectId = (req.query.project_id || req.query.state) as string;
-
+    // 🛑 Validación mínima
     if (!code || !projectId) {
-      res.status(400).json({ error: 'Faltan parámetros: code o project_id' });
-      return;
+      return res.status(400).send('Missing code or projectId in callback.');
     }
 
-    const config = OAUTH_CONFIG_BY_PROJECT[projectId];
-    if (!config) {
-      res.status(400).json({ error: 'project_id inválido' });
-      return;
-    }
+    // 🔄 Intercambiamos el code por los tokens de acceso
+    const tokens = await exchangeCodeForTokens(code, projectId);
 
-    const oauth2Client = new google.auth.OAuth2({
-      clientId: config.client_id,
-      clientSecret: config.client_secret,
-      redirectUri: config.redirect_uri,
-    });
-
-    const { tokens } = await oauth2Client.getToken(code);
     const accessToken = tokens.access_token;
     if (!accessToken) {
-      res.status(400).json({ error: 'No se recibió access_token' });
-      return;
+      return res.status(400).send('No access token received');
     }
 
+    // 🔐 Instanciamos el cliente OAuth con los tokens
+    const oauth2Client = getOAuthClient(projectId);
     oauth2Client.setCredentials(tokens);
-    const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
-    const userInfo = await oauth2.userinfo.get();
-    const email = userInfo.data.email;
+
+    // 👤 Obtenemos el correo del usuario
+    const userInfo = await getUserInfoFromToken(tokens);
+    const email = userInfo?.email;
+
     if (!email) {
-      res.status(400).json({ error: 'No se pudo obtener el email del usuario' });
-      return;
+      return res.status(400).send('No user email received');
     }
 
-    const driveProvider = new GoogleDriveProvider(accessToken);
-    const folderId = await driveProvider.createFolder(email, projectId);
+    // 📁 Inicializamos provider (Google Drive en este caso)
+    const drive: drive_v3.Drive = google.drive({ version: 'v3', auth: oauth2Client });
+    const provider = providerFactory('google', email, drive);
 
-    await saveTokensAndFolder(email, projectId, {
-      access_token: accessToken,
-      refresh_token: tokens.refresh_token ?? undefined,
-    }, folderId);
+    // 📂 Creamos carpeta raíz para el usuario + producto
+    const folderId = await provider.createFolder(email, projectId);
 
-    res.status(200).json({ email, folderId });
-  } catch (error: any) {
-    console.error('[OAuth Error]', error);
-    res.status(500).json({ error: 'Error en el callback OAuth' });
+    // ✅ Respondemos con éxito y los datos básicos
+    return res.status(200).json({
+      message: 'OAuth callback successful',
+      email,
+      folderId
+    });
+  } catch (error) {
+    console.error('OAuth callback error:', error);
+    return res.status(500).send('Internal Server Error during OAuth callback');
   }
 };

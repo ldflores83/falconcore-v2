@@ -1,35 +1,86 @@
 {
+  "hosting": [
+    {
+      "target": "yeka",
+      "public": "frontends/dist/yeka",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**"
+      ],
+      "headers": [
+        {
+          "source": "**/*.js",
+          "headers": [
+            {
+              "key": "Content-Type",
+              "value": "application/javascript"
+            }
+          ]
+        }
+      ],
+      "rewrites": [
+        {
+          "source": "**",
+          "destination": "/index.html"
+        }
+      ]
+    },
+    {
+      "target": "pulziohq",
+      "public": "frontends/dist/pulziohq",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**"
+      ],
+      "headers": [
+        {
+          "source": "**/*.js",
+          "headers": [
+            {
+              "key": "Content-Type",
+              "value": "application/javascript"
+            }
+          ]
+        }
+      ],
+      "rewrites": [
+        {
+          "source": "**",
+          "destination": "/index.html"
+        }
+      ]
+    },
+    {
+      "target": "jobpulse",
+      "public": "frontends/dist/jobpulse",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**"
+      ],
+      "headers": [
+        {
+          "source": "**/*.js",
+          "headers": [
+            {
+              "key": "Content-Type",
+              "value": "application/javascript"
+            }
+          ]
+        }
+      ],
+      "rewrites": [
+        {
+          "source": "**",
+          "destination": "/index.html"
+        }
+      ]
+    }
+  ],
   "functions": {
     "source": "functions",
-    "runtime": "nodejs18",
-    "predeploy": [
-      "npm --prefix \"$RESOURCE_DIR\" run build"
-    ]
-  },
-  "emulators": {
-    "functions": {
-      "port": 5001
-    },
-    "firestore": {
-      "port": 8080
-    },
-    "ui": {
-      "enabled": true
-    },
-    "singleProjectMode": true
-  },
-  "hosting": {
-    "public": "public",
-    "ignore": [
-      "firebase.json",
-      "**/.*",
-      "**/node_modules/**"
-    ],
-    "rewrites": [
-      {
-        "source": "**",
-        "destination": "/index.html"
-      }
-    ]
+    "runtime": "nodejs20"
   }
 }
