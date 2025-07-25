@@ -1,26 +1,36 @@
 "use strict";
+// /functions/src/storage/providers/GoogleDriveProvider.ts
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.GoogleDriveProvider = void 0;
-// /src/storage/providers/GoogleDriveProvider.ts
-const googleapis_1 = require("googleapis");
-const getOrCreateFolder_1 = require("../utils/getOrCreateFolder");
 class GoogleDriveProvider {
-    constructor(accessToken) {
-        const oauth2Client = new googleapis_1.google.auth.OAuth2();
-        oauth2Client.setCredentials({ access_token: accessToken });
-        this.drive = googleapis_1.google.drive({ version: 'v3', auth: oauth2Client });
+    constructor(accessToken, drive) {
+        this.accessToken = accessToken;
+        this.drive = drive;
     }
     async createFolder(email, projectId) {
-        try {
-            const rootFolderName = `Root - ${email}`;
-            const rootFolderId = await (0, getOrCreateFolder_1.getOrCreateFolder)(this.drive, rootFolderName);
-            const projectFolderId = await (0, getOrCreateFolder_1.getOrCreateFolder)(this.drive, projectId, rootFolderId);
-            return projectFolderId;
+        const folderName = `${projectId} - ${email}`;
+        // Buscar si la carpeta ya existe
+        const existing = await this.drive.files.list({
+            q: `name='${folderName}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+            fields: "files(id, name)",
+            spaces: "drive",
+        });
+        if (existing.data.files && existing.data.files.length > 0) {
+            return existing.data.files[0].id;
         }
-        catch (error) {
-            console.error('[Drive Error]', error);
-            throw new Error('Error al crear carpeta en Drive');
+        // Crear nueva carpeta si no existe
+        const res = await this.drive.files.create({
+            requestBody: {
+                name: folderName,
+                mimeType: "application/vnd.google-apps.folder",
+            },
+            fields: "id",
+        });
+        const folderId = res.data.id;
+        if (!folderId) {
+            throw new Error("Failed to create folder in Google Drive.");
         }
+        return folderId;
     }
 }
 exports.GoogleDriveProvider = GoogleDriveProvider;

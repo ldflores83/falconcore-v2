@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.OAUTH_CONFIG_BY_PROJECT = void 0;
+exports.getUserInfoFromToken = exports.exchangeCodeForTokens = exports.getOAuthClient = exports.OAUTH_SCOPES = void 0;
+const googleapis_1 = require("googleapis");
 /**
  * Configuración OAuth por proyecto (MVP / Módulo).
  *
@@ -12,64 +13,43 @@ exports.OAUTH_CONFIG_BY_PROJECT = void 0;
  * En MVPs iniciales se reutiliza la misma app OAuth (misma client_id),
  * pero puede migrarse luego a apps separadas si se desea aislamiento total.
  */
-exports.OAUTH_CONFIG_BY_PROJECT = {
-    devproject: {
-        client_id: process.env.CLIENT_ID,
-        client_secret: process.env.CLIENT_SECRET,
-        redirect_uri: process.env.REDIRECT_URI,
-        scopes: [
-            'https://www.googleapis.com/auth/drive.file',
-            'https://www.googleapis.com/auth/userinfo.email',
-            'https://www.googleapis.com/auth/userinfo.profile'
-        ],
-        provider: 'google'
+// 🔐 Configuración modular por producto
+const oauthConfigs = {
+    yeka: {
+        clientId: process.env.CLIENT_ID,
+        clientSecret: process.env.CLIENT_SECRET,
+        redirectUri: process.env.YEKA_REDIRECT_URI,
     },
-    // 🚀 MVP colaborativo con AI copilots
-    ideasync: {
-        client_id: process.env.CLIENT_ID,
-        client_secret: process.env.CLIENT_SECRET,
-        redirect_uri: process.env.REDIRECT_URI,
-        scopes: [
-            'https://www.googleapis.com/auth/drive.file',
-            'https://www.googleapis.com/auth/userinfo.email',
-            'https://www.googleapis.com/auth/userinfo.profile'
-        ],
-        provider: 'google'
-    },
-    // 🧠 MVP para CS copilot mamon!
-    clientpulse: {
-        client_id: process.env.CLIENT_ID,
-        client_secret: process.env.CLIENT_SECRET,
-        redirect_uri: process.env.REDIRECT_URI,
-        scopes: [
-            'https://www.googleapis.com/auth/drive.file',
-            'https://www.googleapis.com/auth/userinfo.email',
-            'https://www.googleapis.com/auth/userinfo.profile'
-        ],
-        provider: 'google'
-    },
-    // 📂 MVP para gestión de búsqueda de empleo
-    jobpulse: {
-        client_id: process.env.CLIENT_ID,
-        client_secret: process.env.CLIENT_SECRET,
-        redirect_uri: process.env.REDIRECT_URI,
-        scopes: [
-            'https://www.googleapis.com/auth/drive.file',
-            'https://www.googleapis.com/auth/userinfo.email',
-            'https://www.googleapis.com/auth/userinfo.profile'
-        ],
-        provider: 'google'
-    },
-    // 🧪 Oferta freelance inicial (audit onboarding con AI)
-    onboardingaudit: {
-        client_id: process.env.CLIENT_ID,
-        client_secret: process.env.CLIENT_SECRET,
-        redirect_uri: process.env.REDIRECT_URI,
-        scopes: [
-            'https://www.googleapis.com/auth/drive.file',
-            'https://www.googleapis.com/auth/userinfo.email',
-            'https://www.googleapis.com/auth/userinfo.profile'
-        ],
-        provider: 'google'
-    }
+    // Agrega más project_ids aquí si usas otros productos
 };
+// 📤 Scopes que solicitamos al usuario al hacer login
+exports.OAUTH_SCOPES = [
+    'https://www.googleapis.com/auth/drive.file',
+    'https://www.googleapis.com/auth/userinfo.email',
+    'https://www.googleapis.com/auth/userinfo.profile'
+];
+// 🔄 Devuelve un cliente OAuth configurado para el producto correspondiente
+const getOAuthClient = (projectId) => {
+    const config = oauthConfigs[projectId];
+    if (!config) {
+        throw new Error(`No OAuth config found for project_id: ${projectId}`);
+    }
+    return new googleapis_1.google.auth.OAuth2(config.clientId, config.clientSecret, config.redirectUri);
+};
+exports.getOAuthClient = getOAuthClient;
+// 🔁 Intercambia el código de autorización recibido por los tokens reales
+const exchangeCodeForTokens = async (code, projectId) => {
+    const oauth2Client = (0, exports.getOAuthClient)(projectId);
+    const { tokens } = await oauth2Client.getToken(code);
+    return tokens;
+};
+exports.exchangeCodeForTokens = exchangeCodeForTokens;
+// 👤 Usa los tokens para obtener los datos del usuario (email, nombre, etc.)
+const getUserInfoFromToken = async (tokens) => {
+    const oauth2Client = new googleapis_1.google.auth.OAuth2();
+    oauth2Client.setCredentials(tokens);
+    const oauth2 = googleapis_1.google.oauth2({ version: 'v2', auth: oauth2Client });
+    const userInfo = await oauth2.userinfo.get();
+    return userInfo.data;
+};
+exports.getUserInfoFromToken = getUserInfoFromToken;

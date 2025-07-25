@@ -1,6 +1,6 @@
+"use strict";
 //functions/src/storage/utils/uploadAsset.ts
-
-/*import { getStorageProvider } from "./providerFactory";     
+/*import { getStorageProvider } from "./providerFactory";
 
 interface UploadAssetParams {
   projectId: string;
@@ -41,4 +41,4 @@ export const uploadAsset = async ({
     status: "success",
   };
 };
-*/
+*/ 

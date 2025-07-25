@@ -50,18 +50,18 @@ export const getOAuthClient = (projectId: string): OAuth2Client => {
 };
 
 // 🔁 Intercambia el código de autorización recibido por los tokens reales
-export async function exchangeCodeForTokens(code: string, projectId: string) {
+export const exchangeCodeForTokens = async (code: string, projectId: string) => {
   const oauth2Client = getOAuthClient(projectId);
   const { tokens } = await oauth2Client.getToken(code);
   return tokens;
-}
+};
 
 // 👤 Usa los tokens para obtener los datos del usuario (email, nombre, etc.)
-export async function getUserInfoFromToken(tokens: any): Promise<oauth2_v2.Schema$Userinfo> {
+export const getUserInfoFromToken = async (tokens: any): Promise<oauth2_v2.Schema$Userinfo> => {
   const oauth2Client = new google.auth.OAuth2();
   oauth2Client.setCredentials(tokens);
 
   const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
   const userInfo = await oauth2.userinfo.get();
   return userInfo.data;
-}
+};

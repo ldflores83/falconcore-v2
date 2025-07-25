@@ -13,11 +13,12 @@
 
 import express from "express";
 import oauthRouter from "./oauth";
-
+//import { saveAsset } from "./api/public/saveAsset";
 
 const app = express();
 
-
+app.use(express.json());
 app.use("/oauth", oauthRouter);
+//app.post("/api/public/saveAsset", saveAsset);
 
 export default app;

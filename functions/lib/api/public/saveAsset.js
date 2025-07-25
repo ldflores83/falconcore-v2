@@ -1,6 +1,6 @@
+"use strict";
 // Paso 1: saveAsset.ts
 // Ruta: /functions/src/api/public/saveAsset.ts
-
 /*import { Request, Response } from "express";
 import { uploadAsset } from "../../storage/utils/uploadAsset";
 
@@ -27,4 +27,4 @@ export const saveAsset = async (req: Request, res: Response) => {
     return res.status(500).json({ error: "Internal server error" });
   }
 };
-*/
+*/ 

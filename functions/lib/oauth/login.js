@@ -1,28 +1,31 @@
 "use strict";
+// functions/src/oauth/login.ts
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.oauthLoginHandler = void 0;
+exports.default = loginHandler;
 const oauth_projects_1 = require("./oauth_projects");
-const google_1 = require("./providers/google");
-const microsoft_1 = require("./providers/microsoft");
-const oauthLoginHandler = (req, res) => {
+// 🚀 Handler para la ruta /oauth/login
+// Espera recibir un query param como: ?project_id=yeka
+function loginHandler(req, res) {
     const projectId = req.query.project_id;
-    const config = oauth_projects_1.OAUTH_CONFIG_BY_PROJECT[projectId];
-    if (!config) {
-        res.status(400).json({ error: 'Invalid project_id' });
-        return;
+    // ⛔️ Validación mínima: si no hay project_id, respondemos con error
+    if (!projectId) {
+        return res.status(400).json({ error: 'Missing project_id in query' });
     }
-    let authUrl = '';
-    switch (config.provider) {
-        case 'google':
-            authUrl = (0, google_1.getGoogleAuthUrl)(config, projectId);
-            break;
-        case 'microsoft':
-            authUrl = (0, microsoft_1.getMicrosoftAuthUrl)(config);
-            break;
-        default:
-            res.status(400).json({ error: 'Unsupported provider' });
-            return;
+    try {
+        // 🔑 Obtenemos el cliente OAuth configurado para este producto
+        const oauth2Client = (0, oauth_projects_1.getOAuthClient)(projectId);
+        // 🌐 Construimos la URL de autorización
+        const authUrl = oauth2Client.generateAuthUrl({
+            access_type: 'offline',
+            scope: oauth_projects_1.OAUTH_SCOPES,
+            prompt: 'consent',
+            state: projectId, // Se usa luego en callback para saber a qué producto pertenece
+        });
+        // 🔁 Redirigimos al usuario a Google OAuth
+        return res.redirect(authUrl);
     }
-    res.redirect(authUrl);
-};
-exports.oauthLoginHandler = oauthLoginHandler;
+    catch (error) {
+        console.error('OAuth login error:', error);
+        return res.status(500).json({ error: 'Failed to generate auth URL' });
+    }
+}

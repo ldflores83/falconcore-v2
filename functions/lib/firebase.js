@@ -1,4 +1,5 @@
 "use strict";
+// src/firebase.ts
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
     var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -34,9 +35,22 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.db = void 0;
-// src/firebase.ts
 const admin = __importStar(require("firebase-admin"));
+const fs_1 = require("fs");
+let serviceAccount = null;
+const secretPath = '/secrets/firebase-admin-key/latest';
+if ((0, fs_1.existsSync)(secretPath)) {
+    try {
+        serviceAccount = JSON.parse((0, fs_1.readFileSync)(secretPath, 'utf8'));
+    }
+    catch (err) {
+        console.error('[firebase.ts] Error reading or parsing service account secret:', err);
+    }
+}
+console.log('[firebase.ts] INICIO de inicialización');
 if (!admin.apps.length) {
-    admin.initializeApp();
+    admin.initializeApp(serviceAccount
+        ? { credential: admin.credential.cert(serviceAccount), projectId: 'falconcore-v2' }
+        : { projectId: 'falconcore-v2' });
 }
 exports.db = admin.firestore();

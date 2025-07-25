@@ -1,0 +1,7 @@
+// /functions/src/utils/hash.ts
+import crypto from "crypto";
+
+export const getUserIdFromEmail = (email: string): string => {
+  const salt = process.env.SYSTEM_SALT || "falconcore_default_salt";
+  return crypto.createHmac("sha256", salt).update(email).digest("hex");
+};

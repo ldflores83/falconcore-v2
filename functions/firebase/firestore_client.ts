@@ -1,21 +1,22 @@
-// functions/firebase/firestore_client.ts
+// 🚨 SOLO PARA SCRIPTS: No importar ni usar desde funciones. No inicializa Firebase aquí.
+// Si necesitas Firestore en funciones, usa 'import { db } from "../src/firebase";'
+// Puedes inicializar aquí SOLO para scripts CLI independientes.
 
-import * as admin from "firebase-admin";
-import * as fs from "fs";
+// import * as admin from "firebase-admin";
+// import * as fs from "fs";
 
-// Ruta al archivo de credenciales
-const serviceAccountPath = process.env.GOOGLE_APPLICATION_CREDENTIALS || "./firebase/firebase-credentials.json";
+// // Ruta al archivo de credenciales
+// const serviceAccountPath = process.env.GOOGLE_APPLICATION_CREDENTIALS || "./firebase/firebase-credentials.json";
 
-// Inicializar Firebase si aún no está inicializado
-if (!admin.apps.length) {
-  const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, "utf8"));
+// // Inicializar Firebase si aún no está inicializado
+// if (!admin.apps.length) {
+//   const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, "utf8"));
+//   admin.initializeApp({
+//     credential: admin.credential.cert(serviceAccount),
+//   });
+// }
 
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-  });
-}
-
-const db = admin.firestore();
+// const db = admin.firestore();
 
 /**
  * Función genérica para escribir en Firestore
