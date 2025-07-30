@@ -1,0 +1,5 @@
+[33m665726a[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m)[m Merge branch 'main' of https://github.com/ldflores83/falconcore-v2 Eliminar credenciales de cuenta de servicio
+[33m0645985[m[33m ([m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m Delete functions/firebase/firebase-credentials.json
+[33me3b3310[m Remove firebase-credentials.json from tracking
+[33mb207952[m Checkpoint: landing + Firestore waitlist working
+[33m4f5d8f9[m  Cierre limpio: flujo OAuth + Drive + Firestore funcional y sin warnings. Se consolidó montaje de secreto y limpieza de código

@@ -2,7 +2,7 @@
 const nextConfig = {
   output: 'export',
   trailingSlash: true,
-  distDir: '../uaylabs/out/ignium',
+  distDir: '../uaylabs/out/pulziohq',
   assetPrefix: './',
   basePath: '',
   images: {

@@ -1,8 +1,8 @@
 {
   "hosting": [
     {
-      "target": "yeka",
-      "public": "frontends/dist/yeka",
+      "target": "uaylabs",
+      "public": "frontends/uaylabs/out",
       "ignore": [
         "firebase.json",
         "**/.*",
@@ -21,57 +21,17 @@
       ],
       "rewrites": [
         {
-          "source": "**",
-          "destination": "/index.html"
-        }
-      ]
-    },
-    {
-      "target": "pulziohq",
-      "public": "frontends/dist/pulziohq",
-      "ignore": [
-        "firebase.json",
-        "**/.*",
-        "**/node_modules/**"
-      ],
-      "headers": [
+          "source": "/ignium/**",
+          "destination": "/ignium/index.html"
+        },
         {
-          "source": "**/*.js",
-          "headers": [
-            {
-              "key": "Content-Type",
-              "value": "application/javascript"
-            }
-          ]
-        }
-      ],
-      "rewrites": [
+          "source": "/jobpulse/**",
+          "destination": "/jobpulse/index.html"
+        },
         {
-          "source": "**",
-          "destination": "/index.html"
-        }
-      ]
-    },
-    {
-      "target": "jobpulse",
-      "public": "frontends/dist/jobpulse",
-      "ignore": [
-        "firebase.json",
-        "**/.*",
-        "**/node_modules/**"
-      ],
-      "headers": [
-        {
-          "source": "**/*.js",
-          "headers": [
-            {
-              "key": "Content-Type",
-              "value": "application/javascript"
-            }
-          ]
-        }
-      ],
-      "rewrites": [
+          "source": "/pulziohq/**",
+          "destination": "/pulziohq/index.html"
+        },
         {
           "source": "**",
           "destination": "/index.html"

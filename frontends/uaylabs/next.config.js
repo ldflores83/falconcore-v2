@@ -1,10 +1,7 @@
-/** @type {import('next').Config} */
+/** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'export',
   trailingSlash: true,
-  distDir: '../uaylabs/out/ignium',
-  assetPrefix: './',
-  basePath: '',
   images: {
     unoptimized: true
   }

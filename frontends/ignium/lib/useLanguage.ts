@@ -149,20 +149,21 @@ const content: Record<Language, LanguageContent> = {
 
 export function useLanguage() {
   const [language, setLanguage] = useState<Language>('es');
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false); // Cambiado a false por defecto
 
   useEffect(() => {
     const detectLanguage = () => {
-      // Check if user is from US/Canada/UK/Australia
-      const userCountry = navigator.language || 'es';
-      const isEnglishSpeaking = userCountry.startsWith('en') || 
-                               userCountry.includes('US') || 
-                               userCountry.includes('CA') || 
-                               userCountry.includes('GB') || 
-                               userCountry.includes('AU');
-      
-      setLanguage(isEnglishSpeaking ? 'en' : 'es');
-      setIsLoading(false);
+      // Solo detectar idioma en el cliente, no en SSR
+      if (typeof window !== 'undefined') {
+        const userCountry = navigator.language || 'es';
+        const isEnglishSpeaking = userCountry.startsWith('en') || 
+                                 userCountry.includes('US') || 
+                                 userCountry.includes('CA') || 
+                                 userCountry.includes('GB') || 
+                                 userCountry.includes('AU');
+        
+        setLanguage(isEnglishSpeaking ? 'en' : 'es');
+      }
     };
 
     detectLanguage();

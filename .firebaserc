@@ -1,5 +1,15 @@
 {
   "projects": {
     "default": "falconcore-v2"
-  }
+  },
+  "targets": {
+    "falconcore-v2": {
+      "hosting": {
+        "uaylabs": [
+          "uaylabs"
+        ]
+      }
+    }
+  },
+  "etags": {}
 }
