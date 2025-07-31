@@ -164,6 +164,26 @@ if not defined DEPLOY_ONLY (
         exit /b 1
     )
     
+    REM Construir onboardingaudit
+    if exist "frontends\onboardingaudit" (
+        call :show_info "Construyendo: onboardingaudit"
+        call :show_progress "Build de onboardingaudit"
+        cd "frontends\onboardingaudit"
+        call npm run build
+        if !errorlevel! equ 0 (
+            call :show_success "Build de onboardingaudit completado"
+        ) else (
+            call :show_error "Build de onboardingaudit falló"
+            pause
+            exit /b 1
+        )
+        cd ..\..
+    ) else (
+        call :show_error "No se encontró el proyecto: onboardingaudit"
+        pause
+        exit /b 1
+    )
+    
     REM Construir uaylabs
     if exist "frontends\uaylabs" (
         call :show_info "Construyendo: uaylabs"
@@ -225,6 +245,13 @@ if not defined BUILD_ONLY (
         exit /b 1
     )
     
+    if not exist "frontends\uaylabs\out\onboardingaudit" (
+        call :show_error "No se encontró el build de onboardingaudit"
+        call :show_info "Ejecuta primero el build de todos los proyectos"
+        pause
+        exit /b 1
+    )
+    
     call :show_success "Todos los builds están listos"
     
     REM Ejecutar deploy
@@ -237,6 +264,7 @@ if not defined BUILD_ONLY (
         call :show_info "  - Ignium: https://uaylabs.web.app/ignium"
         call :show_info "  - JobPulse: https://uaylabs.web.app/jobpulse"
         call :show_info "  - PulzioHQ: https://uaylabs.web.app/pulziohq"
+        call :show_info "  - OnboardingAudit: https://uaylabs.web.app/onboardingaudit"
     ) else (
         call :show_error "Deploy falló"
         pause

@@ -10,6 +10,7 @@ frontends/
 ├── ignium/         # Landing del producto Ignium
 ├── jobpulse/       # Landing del producto JobPulse
 ├── pulziohq/       # Landing del producto PulzioHQ
+├── onboardingaudit/ # Módulo de Auditoría de Onboarding
 └── node_modules/   # Dependencias compartidas (optimización)
 ```
 
@@ -21,6 +22,7 @@ frontends/
 | **Ignium** | Landing del producto Ignium | `http://localhost:3000/` | `https://uaylabs.web.app/ignium/` |
 | **JobPulse** | Landing del producto JobPulse | `http://localhost:3000/` | `https://uaylabs.web.app/jobpulse/` |
 | **PulzioHQ** | Landing del producto PulzioHQ | `http://localhost:3000/` | `https://uaylabs.web.app/pulziohq/` |
+| **OnboardingAudit** | Módulo de Auditoría de Onboarding | `http://localhost:3000/` | `https://uaylabs.web.app/onboardingaudit/` |
 
 ## 🚀 Desarrollo
 
@@ -33,6 +35,9 @@ producto/
 ├── pages/
 │   ├── index.tsx      # Landing principal del producto
 │   └── _app.tsx       # Configuración de la app
+├── components/         # Componentes específicos del producto
+├── lib/               # Utilidades y APIs específicas
+├── types/             # Tipos TypeScript específicos
 ├── styles/
 │   └── globals.css    # Estilos globales (Tailwind)
 ├── package.json       # Dependencias específicas
@@ -50,14 +55,15 @@ frontends/uaylabs/out/
 ├── index.html              # Página principal de UayLabs
 ├── ignium/
 │   ├── index.html          # Página de Ignium
-│   ├── jobpulse/           # Subproductos de Ignium
-│   ├── pulziohq/           # Subproductos de Ignium
 │   └── _next/              # Assets estáticos
 ├── jobpulse/
 │   ├── index.html          # Página de Jobpulse
 │   └── _next/              # Assets estáticos
 ├── pulziohq/
 │   ├── index.html          # Página de Pulziohq
+│   └── _next/              # Assets estáticos
+├── onboardingaudit/
+│   ├── index.html          # Página de OnboardingAudit
 │   └── _next/              # Assets estáticos
 └── _next/                  # Assets compartidos
 ```
@@ -94,8 +100,51 @@ npm run dev
 # Construir para producción (genera en uaylabs/out/[producto])
 npm run build
 
-# Desplegar a Firebase
-npm run deploy
+# Desplegar a Firebase (usando scripts optimizados)
+# Desde el directorio raíz del proyecto:
+.\scripts\build-[producto].ps1
+```
+
+### 🔧 Sistema de Dependencias Compartidas
+
+Para optimizar el almacenamiento y evitar duplicación, se implementó un sistema de dependencias compartidas:
+
+#### Estructura de dependencias:
+```
+frontends/
+├── package.json          # Dependencias compartidas
+├── node_modules/         # Dependencias compartidas
+└── [producto]/
+    ├── package.json      # Solo configuraciones específicas
+    └── (sin node_modules local)
+```
+
+#### Dependencias compartidas incluidas:
+- **React & Next.js**: `react`, `react-dom`, `next`
+- **Herramientas de desarrollo**: `typescript`, `eslint`, `tailwindcss`
+- **Utilidades**: `axios` para llamadas HTTP
+- **Tipos**: `@types/react`, `@types/node`
+
+#### Configuración de proyectos:
+Cada proyecto debe tener un `package.json` con scripts que usen `npx --prefix ../`:
+
+```json
+{
+  "scripts": {
+    "dev": "npx --prefix ../ next dev",
+    "build": "npx --prefix ../ next build",
+    "start": "npx --prefix ../ next start",
+    "lint": "npx --prefix ../ next lint"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}
+```
+
+#### Agregar nuevas dependencias compartidas:
+```bash
+cd frontends
+npm install [nueva-dependencia]
 ```
 
 ## ➕ Crear un nuevo producto
@@ -120,29 +169,15 @@ mkdir pages styles
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint",
-    "export": "next build",
+    "dev": "npx --prefix ../ next dev",
+    "build": "npx --prefix ../ next build",
+    "start": "npx --prefix ../ next start",
+    "lint": "npx --prefix ../ next lint",
+    "export": "npx --prefix ../ next build",
     "deploy": "npm run build && firebase deploy --only hosting:uaylabs"
   },
-  "dependencies": {
-    "next": "14.2.30",
-    "react": "^18",
-    "react-dom": "^18"
-  },
-  "devDependencies": {
-    "@types/node": "^20",
-    "@types/react": "^18",
-    "@types/react-dom": "^18",
-    "autoprefixer": "^10.0.1",
-    "eslint": "^8",
-    "eslint-config-next": "14.2.30",
-    "postcss": "^8",
-    "tailwindcss": "^3.3.0",
-    "typescript": "^5"
-  }
+  "dependencies": {},
+  "devDependencies": {}
 }
 ```
 
@@ -304,12 +339,49 @@ Para componentes compartidos entre productos, considera crear una librería de c
 
 ## 🚀 Despliegue
 
+### Sistema de Scripts de Build y Deploy
+
+Se ha implementado un sistema optimizado de scripts para facilitar el desarrollo y despliegue:
+
+#### Scripts disponibles
+
+```bash
+# Ver todas las opciones disponibles
+.\scripts\build-help.ps1
+
+# Build y deploy de TODOS los productos
+.\scripts\quick-build.ps1
+
+# Scripts específicos por producto (más rápido para desarrollo)
+.\scripts\build-onboardingaudit.ps1
+.\scripts\build-ignium.ps1
+.\scripts\build-jobpulse.ps1
+.\scripts\build-pulziohq.ps1
+```
+
+#### Ventajas del sistema de scripts
+
+- **Desarrollo rápido**: Solo construyes el producto que modificaste
+- **Deploy eficiente**: Menos tiempo de espera
+- **Organización clara**: Scripts específicos por producto
+- **Flexibilidad**: Puedes elegir qué construir
+
+#### Orden de construcción
+
+Los scripts siguen este orden optimizado:
+1. **uaylabs** - Crea la estructura base del directorio `out`
+2. **Producto específico** - Se exporta a `uaylabs/out/[producto]/`
+3. **Deploy** - Sube todo a Firebase
+
 ### Firebase Hosting
 
 Todos los productos se despliegan a Firebase Hosting bajo el mismo dominio:
 
 ```bash
-# Construir y desplegar
+# Construir y desplegar (usando scripts)
+.\scripts\quick-build.ps1
+
+# O manualmente
 npm run deploy
 ```
 
@@ -320,6 +392,15 @@ Firebase está configurado para servir cada producto en su ruta correspondiente:
 - `/ignium/` → Ignium
 - `/jobpulse/` → JobPulse
 - `/pulziohq/` → PulzioHQ
+- `/onboardingaudit/` → OnboardingAudit
+
+### URLs de producción
+
+- **UayLabs**: https://uaylabs.web.app
+- **Ignium**: https://uaylabs.web.app/ignium
+- **JobPulse**: https://uaylabs.web.app/jobpulse
+- **PulzioHQ**: https://uaylabs.web.app/pulziohq
+- **OnboardingAudit**: https://uaylabs.web.app/onboardingaudit
 
 ### Estructura de deployment
 
@@ -332,6 +413,7 @@ firebase.json
 │               ├── "/ignium/**" → "/ignium/index.html"
 │               ├── "/jobpulse/**" → "/jobpulse/index.html"
 │               ├── "/pulziohq/**" → "/pulziohq/index.html"
+│               ├── "/onboardingaudit/**" → "/onboardingaudit/index.html"
 │               └── "**" → "/index.html"
 ```
 
@@ -379,10 +461,17 @@ rm -rf node_modules && npm install
 # Verificar estructura de builds
 ls -la frontends/uaylabs/out/
 
-# Construir todos los productos
-cd frontends/ignium && npm run build
-cd ../jobpulse && npm run build
-cd ../pulziohq && npm run build
+# Construir todos los productos (usando scripts)
+.\scripts\quick-build.ps1
+
+# Construir producto específico
+.\scripts\build-onboardingaudit.ps1
+.\scripts\build-ignium.ps1
+.\scripts\build-jobpulse.ps1
+.\scripts\build-pulziohq.ps1
+
+# Ver opciones disponibles
+.\scripts\build-help.ps1
 ```
 
 ## 📚 Recursos

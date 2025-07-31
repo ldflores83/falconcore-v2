@@ -38,7 +38,9 @@ We’ll review your signup flow and deliver a 2–3 page report with actionable 
 
 ### Section 2 – Current Onboarding Flow
 4. How do new users sign up today? (Email & Password / Google / Invite-only / Other)  
-5. What does the first-time experience look like? (Walkthrough / Empty state / Checklist / Other)  
+   - If "Other" selected: Show text input field for description
+5. After a new user signs up, what do they see first? (A guided walkthrough or tutorial / A blank/empty dashboard with a call-to-action / A checklist or progress bar to complete setup / Something else (please describe))  
+   - If "Something else" selected: Show text input field for description
 6. Do you track drop-off points during onboarding? (Yes / No / Not sure)
 
 ### Section 2.5 – Optional: Help us see your flow
@@ -55,6 +57,11 @@ We’ll review your signup flow and deliver a 2–3 page report with actionable 
 ### Section 4 – Delivery
 14. Your email to send the report  
 15. Preferred format: Google Doc / Google Slides
+16. Upload screenshots (Optional)
+    - Multiple file upload supported
+    - Total size limit: 10MB
+    - File removal functionality
+    - Note: For additional files, send to luisdaniel883gmail.com
 
 **Final Note:**  
 *We’ll deliver your report with key insights and recommendations within 48 hours.*

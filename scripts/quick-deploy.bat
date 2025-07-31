@@ -45,6 +45,17 @@ if errorlevel 1 (
 )
 cd ..\..
 
+REM Construir onboardingaudit
+echo   🔄 Construyendo onboardingaudit...
+cd "frontends\onboardingaudit"
+call npm run build
+if errorlevel 1 (
+    echo   ❌ Error construyendo onboardingaudit
+    pause
+    exit /b 1
+)
+cd ..\..
+
 REM Construir uaylabs
 echo   🔄 Construyendo uaylabs...
 cd "frontends\uaylabs"
@@ -76,5 +87,6 @@ echo   - UayLabs: https://uaylabs.web.app
 echo   - Ignium: https://uaylabs.web.app/ignium
 echo   - JobPulse: https://uaylabs.web.app/jobpulse
 echo   - PulzioHQ: https://uaylabs.web.app/pulziohq
+echo   - OnboardingAudit: https://uaylabs.web.app/onboardingaudit
 echo.
 pause 

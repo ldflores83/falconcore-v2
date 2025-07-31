@@ -113,6 +113,7 @@ function Start-BuildAndDeploy {
         @{ Name = "ignium"; Path = "frontends\ignium" },
         @{ Name = "jobpulse"; Path = "frontends\jobpulse" },
         @{ Name = "pulziohq"; Path = "frontends\pulziohq" },
+        @{ Name = "onboardingaudit"; Path = "frontends\onboardingaudit" },
         @{ Name = "uaylabs"; Path = "frontends\uaylabs" }
     )
     
@@ -165,7 +166,7 @@ function Start-BuildAndDeploy {
         }
         
         # Verificar que todos los productos estén construidos
-        $requiredProducts = @("ignium", "jobpulse", "pulziohq")
+        $requiredProducts = @("ignium", "jobpulse", "pulziohq", "onboardingaudit")
         foreach ($product in $requiredProducts) {
             $productPath = "$outPath\$product"
             if (-not (Test-Path $productPath)) {
@@ -187,6 +188,7 @@ function Start-BuildAndDeploy {
             Show-Info "  - Ignium: https://uaylabs.web.app/ignium"
             Show-Info "  - JobPulse: https://uaylabs.web.app/jobpulse"
             Show-Info "  - PulzioHQ: https://uaylabs.web.app/pulziohq"
+            Show-Info "  - OnboardingAudit: https://uaylabs.web.app/onboardingaudit"
         } else {
             Show-Error "Deploy falló"
             exit 1
