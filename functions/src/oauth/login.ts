@@ -1,35 +1,67 @@
 // functions/src/oauth/login.ts
 
 import { Request, Response } from 'express';
-import { getOAuthClient, OAUTH_SCOPES } from './oauth_projects';
+import { google } from 'googleapis';
+import { getOAuthConfig } from '../config';
 
-// 🚀 Handler para la ruta /oauth/login
-// Espera recibir un query param como: ?project_id=yeka
-export default function loginHandler(req: Request, res: Response) {
-  const projectId = req.query.project_id as string;
-
-  // ⛔️ Validación mínima: si no hay project_id, respondemos con error
-  if (!projectId) {
-    return res.status(400).json({ error: 'Missing project_id in query' });
-  }
-
+export const login = async (req: Request, res: Response) => {
+  console.log('🔧 OAuth login function called - UPDATED VERSION');
   try {
-    // 🔑 Obtenemos el cliente OAuth configurado para este producto
-    const oauth2Client = getOAuthClient(projectId);
+    const { project_id } = req.query;
 
-    // 🌐 Construimos la URL de autorización
+    if (!project_id) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing project_id parameter"
+      });
+    }
+
+    // Configurar OAuth2
+    const oauthConfig = await getOAuthConfig();
+    
+    // Debug: Verificar que las credenciales se están leyendo correctamente
+    console.log('🔧 OAuth Config Debug:', {
+      clientId: oauthConfig.clientId ? `${oauthConfig.clientId.substring(0, 10)}...` : 'NULL',
+      hasClientSecret: !!oauthConfig.clientSecret,
+      redirectUri: oauthConfig.redirectUri
+    });
+    
+    const oauth2Client = new google.auth.OAuth2(
+      oauthConfig.clientId,
+      oauthConfig.clientSecret,
+      oauthConfig.redirectUri
+    );
+
+    // Crear estado solo con projectId - el email se obtendrá del usuario autenticado
+    const state = project_id as string;
+
+    // Generar URL de autorización según el flujo documentado
     const authUrl = oauth2Client.generateAuthUrl({
       access_type: 'offline',
-      scope: OAUTH_SCOPES,
+      scope: [
+        'openid',
+        'email',
+        'profile',
+        'https://www.googleapis.com/auth/drive.file'
+      ],
       prompt: 'consent',
-      state: projectId, // Se usa luego en callback para saber a qué producto pertenece
+      state: state
     });
 
-    // 🔁 Redirigimos al usuario a Google OAuth
+    console.log('🔗 OAuth login URL generated:', {
+      projectId: project_id,
+      timestamp: new Date().toISOString()
+    });
+
     return res.redirect(authUrl);
 
   } catch (error) {
-    console.error('OAuth login error:', error);
-    return res.status(500).json({ error: 'Failed to generate auth URL' });
+    console.error('❌ Error in OAuth login:', error);
+    
+    return res.status(500).json({
+      success: false,
+      message: "Failed to generate OAuth URL",
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
   }
-}
+};

@@ -1,131 +1,147 @@
-// /src/oauth/callback.ts
+// functions/src/oauth/callback.ts
 
-import { Request, Response } from 'express';
-import { google, drive_v3 } from 'googleapis';
-import { providerFactory } from '../storage/utils/providerFactory';
+import { Request, Response } from "express";
+import { google } from 'googleapis';
+import { StorageProviderFactory } from '../storage/utils/providerFactory';
+import { getUserInfoFromToken } from './oauth_projects';
+import { saveOAuthData } from './saveOAuthData';
+import { getOAuthConfig } from '../config';
 
-import { getUserIdFromEmail } from "../utils/hash";        // 🔐 Convierte email → userId (hash persistente)
-import { saveOAuthData } from "./saveOAuthData";           // 💾 Guarda token + folderId en Firestore
-
-import {
-  exchangeCodeForTokens,         // 🔄 Intercambia código por access_token + refresh_token
-  getUserInfoFromToken,          // 👤 Extrae email del usuario usando el token
-  getOAuthClient                 // 🔧 Genera cliente OAuth configurado por proyecto
-} from './oauth_projects';
-
-export const oauthCallbackHandler = async (req: Request, res: Response) => {
+export const callback = async (req: Request, res: Response) => {
+  console.log('🔧 OAuth callback started - UPDATED VERSION');
+  console.log('🔧 Callback request query:', req.query);
+  
   try {
-    // 📝 Log al inicio del handler
-    console.log('[OAuth] Callback handler invoked', {
-      query: req.query,
-      time: new Date().toISOString()
+    const { code, state } = req.query;
+
+    console.log('🔧 Callback parameters:', { code: !!code, state });
+
+    if (!code || !state) {
+      console.error('❌ Missing required parameters:', { code: !!code, state });
+      return res.status(400).json({
+        success: false,
+        message: "Missing required parameters: code and state"
+      });
+    }
+
+    // El state es directamente el projectId según el flujo documentado
+    const projectId = state as string;
+    console.log('🔧 Project ID from state:', projectId);
+
+    // Configurar OAuth2
+    console.log('🔧 Getting OAuth config...');
+    const oauthConfig = await getOAuthConfig();
+    console.log('🔧 OAuth config obtained:', {
+      hasClientId: !!oauthConfig.clientId,
+      hasClientSecret: !!oauthConfig.clientSecret,
+      redirectUri: oauthConfig.redirectUri
     });
+    
+    const oauth2Client = new google.auth.OAuth2(
+      oauthConfig.clientId,
+      oauthConfig.clientSecret,
+      oauthConfig.redirectUri
+    );
 
-    // 🎯 Extraemos `code` y `projectId` (enviado en `state` durante login)
-    const code = req.query.code as string;
-    const projectId = req.query.state as string;
-
-    // Log después de recibir code y projectId
-    console.log('[OAuth] Received code and projectId', { code: !!code, projectId });
-
-    if (!code || !projectId) {
-      console.warn('[OAuth] Missing code or projectId in callback', { code, projectId });
-      return res.status(400).send('Missing code or projectId in callback.');
-    }
-
-    // 🔐 Intercambiamos el `code` por tokens de acceso usando el cliente OAuth
-    let tokens;
-    try {
-      tokens = await exchangeCodeForTokens(code, projectId);
-    } catch (error: any) {
-      if (error?.response?.data?.error === 'invalid_grant') {
-        console.error('[OAuth] Código de autorización inválido o expirado');
-        return res.status(400).json({ error: 'El código de autorización ya fue usado o expiró. Intenta iniciar sesión de nuevo.' });
-      }
-      // Otros errores
-      console.error('[OAuth] Error inesperado al intercambiar código por tokens:', error);
-      return res.status(500).send('Internal Server Error during OAuth callback');
-    }
-    const accessToken = tokens.access_token;
-
-    // Log después de obtener los tokens
-    console.log('[OAuth] Tokens received', {
-      hasAccessToken: !!accessToken,
+    // Intercambiar código por tokens
+    console.log('🔧 Exchanging code for tokens...');
+    const { tokens } = await oauth2Client.getToken(code as string);
+    console.log('🔧 Tokens obtained:', {
+      hasAccessToken: !!tokens.access_token,
       hasRefreshToken: !!tokens.refresh_token,
-      expiryDate: tokens.expiry_date
+      hasExpiryDate: !!tokens.expiry_date
     });
-
-    if (!accessToken) {
-      console.warn('[OAuth] No access token received', { tokens });
-      return res.status(400).send('No access token received');
+    
+    if (!tokens.access_token) {
+      throw new Error("Failed to get access token");
     }
 
-    // 🛠 Configuramos cliente OAuth con las credenciales recibidas
-    const oauth2Client = getOAuthClient(projectId);
-    oauth2Client.setCredentials(tokens);
-
-    // 👤 Obtenemos información del usuario (incluyendo email) usando el token
+    // Obtener información real del usuario autenticado
+    console.log('🔧 Getting user info from token...');
     const userInfo = await getUserInfoFromToken(tokens);
-    const email = userInfo?.email;
+    const authenticatedEmail = userInfo.email;
+    console.log('🔧 User info obtained:', {
+      email: authenticatedEmail,
+      name: userInfo.name,
+      picture: userInfo.picture
+    });
 
-    // Log después de obtener el email
-    console.log('[OAuth] User info received', { email });
-
-    if (!email) {
-      console.warn('[OAuth] No user email received', { userInfo });
-      return res.status(400).send('No user email received');
+    if (!authenticatedEmail) {
+      throw new Error("Could not retrieve user email from OAuth");
     }
 
-    // 🧠 Generamos `userId` como hash del email — clave interna segura
-    const userId = getUserIdFromEmail(email);
-
-    // 📁 Inicializamos Google Drive Provider con instancia autorizada
-    const drive: drive_v3.Drive = google.drive({ version: 'v3', auth: oauth2Client });
-    const provider = providerFactory('google', email, drive); // email aún necesario para nombre visible de carpeta
-
-    // 🗂️ Creamos carpeta raíz de proyecto (si no existe ya) → "Root - {email} / {projectId}"
-    const folderId = await provider.createFolder(email, projectId);
-
-    // Log después de crear la carpeta en Drive
-    console.log('[OAuth] Drive folder created or found', { folderId, email, projectId });
-
-    // 🧪 Logging defensivo: detecta si faltan `refresh_token` o `expiry_date`
-    const missing: string[] = [];
-    if (!tokens.refresh_token) missing.push("refresh_token");
-    if (!tokens.expiry_date) missing.push("expiry_date");
-
-    if (missing.length > 0) {
-      console.warn(`[OAuth] Missing token fields: ${missing.join(", ")} — user: ${email}, project: ${projectId}`);
-    }
-
-    // 💾 Guardamos token, folderId y metadatos en Firestore bajo `/users/{userId}/tokens/{projectId}.json`
-    await saveOAuthData({
-      userId,
+    console.log('✅ OAuth tokens obtained:', {
+      authenticatedEmail,
       projectId,
-      accessToken: tokens.access_token!,
-      folderId,
-      refreshToken: tokens.refresh_token ?? undefined, // null → undefined
-      expiresAt: tokens.expiry_date ?? undefined       // null → undefined
+      hasAccessToken: !!tokens.access_token,
+      hasRefreshToken: !!tokens.refresh_token
     });
 
-    // Log antes de retornar la respuesta JSON
-    console.log('[OAuth] Callback successful, responding to client', {
-      userId,
-      email,
-      folderId,
-      projectId
-    });
+    // Crear provider y probar conexión
+    console.log('🔧 Creating storage provider...');
+    const provider = StorageProviderFactory.createProvider('google');
+    
+    try {
+      // Probar creación de carpeta con el email real del usuario
+      console.log('🔧 Creating folder in Google Drive...');
+      
+      // Pasar los tokens directamente al provider en lugar de usar Firestore
+      const folderId = await provider.createFolderWithTokens(
+        authenticatedEmail, 
+        projectId, 
+        tokens.access_token,
+        tokens.refresh_token || undefined
+      );
+      
+      console.log('🔧 Folder created:', folderId);
+      
+      // Guardar datos OAuth en Firestore
+      console.log('🔧 Saving OAuth data to Firestore...');
+      const userId = `${authenticatedEmail}_${projectId}`;
+      await saveOAuthData({
+        userId,
+        projectId,
+        accessToken: tokens.access_token,
+        refreshToken: tokens.refresh_token || undefined,
+        expiresAt: tokens.expiry_date || undefined,
+        folderId,
+        email: authenticatedEmail
+      });
+      console.log('🔧 OAuth data saved to Firestore');
+      
+      console.log('✅ OAuth callback successful:', {
+        authenticatedEmail,
+        projectId,
+        folderId,
+        timestamp: new Date().toISOString()
+      });
 
-    // ✅ Confirmamos al frontend (respuesta temporal para pruebas)
-    return res.status(200).json({
-      message: 'OAuth callback successful',
-      userId,
-      email,
-      folderId
-    });
+      // Redirigir al dashboard en lugar de mostrar JSON
+      const dashboardUrl = `https://uaylabs.web.app/onboardingaudit/admin`;
+      return res.redirect(dashboardUrl);
+
+    } catch (error) {
+      console.error('❌ Error testing provider after OAuth:', error);
+      
+      return res.status(500).json({
+        success: false,
+        message: "OAuth successful but provider test failed",
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
 
   } catch (error) {
-    console.error('OAuth callback error:', error);
-    return res.status(500).send('Internal Server Error during OAuth callback');
+    console.error('❌ Error in OAuth callback:', error);
+    console.error('❌ Error details:', {
+      name: (error as any).name,
+      message: (error as any).message,
+      stack: (error as any).stack
+    });
+    
+    return res.status(500).json({
+      success: false,
+      message: "OAuth callback failed",
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
   }
 };

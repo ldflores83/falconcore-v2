@@ -37,6 +37,9 @@ We’ll review your signup flow and deliver a 2–3 page report with actionable 
 3. Who is your target user? (Founders / Developers / SMBs / Consumers / Other)
 
 ### Section 2 – Current Onboarding Flow
+
+
+
 4. How do new users sign up today? (Email & Password / Google / Invite-only / Other)  
    - If "Other" selected: Show text input field for description
 5. After a new user signs up, what do they see first? (A guided walkthrough or tutorial / A blank/empty dashboard with a call-to-action / A checklist or progress bar to complete setup / Something else (please describe))  

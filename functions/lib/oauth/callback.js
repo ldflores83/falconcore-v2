@@ -1,110 +1,119 @@
 "use strict";
-// /src/oauth/callback.ts
+// functions/src/oauth/callback.ts
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.oauthCallbackHandler = void 0;
+exports.callback = void 0;
 const googleapis_1 = require("googleapis");
 const providerFactory_1 = require("../storage/utils/providerFactory");
-const hash_1 = require("../utils/hash"); // 🔐 Convierte email → userId (hash persistente)
-const saveOAuthData_1 = require("./saveOAuthData"); // 💾 Guarda token + folderId en Firestore
 const oauth_projects_1 = require("./oauth_projects");
-const oauthCallbackHandler = async (req, res) => {
+const saveOAuthData_1 = require("./saveOAuthData");
+const config_1 = require("../config");
+const callback = async (req, res) => {
+    console.log('🔧 OAuth callback started - UPDATED VERSION');
+    console.log('🔧 Callback request query:', req.query);
     try {
-        // 📝 Log al inicio del handler
-        console.log('[OAuth] Callback handler invoked', {
-            query: req.query,
-            time: new Date().toISOString()
-        });
-        // 🎯 Extraemos `code` y `projectId` (enviado en `state` durante login)
-        const code = req.query.code;
-        const projectId = req.query.state;
-        // Log después de recibir code y projectId
-        console.log('[OAuth] Received code and projectId', { code: !!code, projectId });
-        if (!code || !projectId) {
-            console.warn('[OAuth] Missing code or projectId in callback', { code, projectId });
-            return res.status(400).send('Missing code or projectId in callback.');
+        const { code, state } = req.query;
+        console.log('🔧 Callback parameters:', { code: !!code, state });
+        if (!code || !state) {
+            console.error('❌ Missing required parameters:', { code: !!code, state });
+            return res.status(400).json({
+                success: false,
+                message: "Missing required parameters: code and state"
+            });
         }
-        // 🔐 Intercambiamos el `code` por tokens de acceso usando el cliente OAuth
-        let tokens;
+        // El state es directamente el projectId según el flujo documentado
+        const projectId = state;
+        console.log('🔧 Project ID from state:', projectId);
+        // Configurar OAuth2
+        console.log('🔧 Getting OAuth config...');
+        const oauthConfig = await (0, config_1.getOAuthConfig)();
+        console.log('🔧 OAuth config obtained:', {
+            hasClientId: !!oauthConfig.clientId,
+            hasClientSecret: !!oauthConfig.clientSecret,
+            redirectUri: oauthConfig.redirectUri
+        });
+        const oauth2Client = new googleapis_1.google.auth.OAuth2(oauthConfig.clientId, oauthConfig.clientSecret, oauthConfig.redirectUri);
+        // Intercambiar código por tokens
+        console.log('🔧 Exchanging code for tokens...');
+        const { tokens } = await oauth2Client.getToken(code);
+        console.log('🔧 Tokens obtained:', {
+            hasAccessToken: !!tokens.access_token,
+            hasRefreshToken: !!tokens.refresh_token,
+            hasExpiryDate: !!tokens.expiry_date
+        });
+        if (!tokens.access_token) {
+            throw new Error("Failed to get access token");
+        }
+        // Obtener información real del usuario autenticado
+        console.log('🔧 Getting user info from token...');
+        const userInfo = await (0, oauth_projects_1.getUserInfoFromToken)(tokens);
+        const authenticatedEmail = userInfo.email;
+        console.log('🔧 User info obtained:', {
+            email: authenticatedEmail,
+            name: userInfo.name,
+            picture: userInfo.picture
+        });
+        if (!authenticatedEmail) {
+            throw new Error("Could not retrieve user email from OAuth");
+        }
+        console.log('✅ OAuth tokens obtained:', {
+            authenticatedEmail,
+            projectId,
+            hasAccessToken: !!tokens.access_token,
+            hasRefreshToken: !!tokens.refresh_token
+        });
+        // Crear provider y probar conexión
+        console.log('🔧 Creating storage provider...');
+        const provider = providerFactory_1.StorageProviderFactory.createProvider('google');
         try {
-            tokens = await (0, oauth_projects_1.exchangeCodeForTokens)(code, projectId);
+            // Probar creación de carpeta con el email real del usuario
+            console.log('🔧 Creating folder in Google Drive...');
+            // Pasar los tokens directamente al provider en lugar de usar Firestore
+            const folderId = await provider.createFolderWithTokens(authenticatedEmail, projectId, tokens.access_token, tokens.refresh_token || undefined);
+            console.log('🔧 Folder created:', folderId);
+            // Guardar datos OAuth en Firestore
+            console.log('🔧 Saving OAuth data to Firestore...');
+            const userId = `${authenticatedEmail}_${projectId}`;
+            await (0, saveOAuthData_1.saveOAuthData)({
+                userId,
+                projectId,
+                accessToken: tokens.access_token,
+                refreshToken: tokens.refresh_token || undefined,
+                expiresAt: tokens.expiry_date || undefined,
+                folderId,
+                email: authenticatedEmail
+            });
+            console.log('🔧 OAuth data saved to Firestore');
+            console.log('✅ OAuth callback successful:', {
+                authenticatedEmail,
+                projectId,
+                folderId,
+                timestamp: new Date().toISOString()
+            });
+            // Redirigir al dashboard en lugar de mostrar JSON
+            const dashboardUrl = `https://uaylabs.web.app/onboardingaudit/admin`;
+            return res.redirect(dashboardUrl);
         }
         catch (error) {
-            if (error?.response?.data?.error === 'invalid_grant') {
-                console.error('[OAuth] Código de autorización inválido o expirado');
-                return res.status(400).json({ error: 'El código de autorización ya fue usado o expiró. Intenta iniciar sesión de nuevo.' });
-            }
-            // Otros errores
-            console.error('[OAuth] Error inesperado al intercambiar código por tokens:', error);
-            return res.status(500).send('Internal Server Error during OAuth callback');
+            console.error('❌ Error testing provider after OAuth:', error);
+            return res.status(500).json({
+                success: false,
+                message: "OAuth successful but provider test failed",
+                error: error instanceof Error ? error.message : 'Unknown error'
+            });
         }
-        const accessToken = tokens.access_token;
-        // Log después de obtener los tokens
-        console.log('[OAuth] Tokens received', {
-            hasAccessToken: !!accessToken,
-            hasRefreshToken: !!tokens.refresh_token,
-            expiryDate: tokens.expiry_date
-        });
-        if (!accessToken) {
-            console.warn('[OAuth] No access token received', { tokens });
-            return res.status(400).send('No access token received');
-        }
-        // 🛠 Configuramos cliente OAuth con las credenciales recibidas
-        const oauth2Client = (0, oauth_projects_1.getOAuthClient)(projectId);
-        oauth2Client.setCredentials(tokens);
-        // 👤 Obtenemos información del usuario (incluyendo email) usando el token
-        const userInfo = await (0, oauth_projects_1.getUserInfoFromToken)(tokens);
-        const email = userInfo?.email;
-        // Log después de obtener el email
-        console.log('[OAuth] User info received', { email });
-        if (!email) {
-            console.warn('[OAuth] No user email received', { userInfo });
-            return res.status(400).send('No user email received');
-        }
-        // 🧠 Generamos `userId` como hash del email — clave interna segura
-        const userId = (0, hash_1.getUserIdFromEmail)(email);
-        // 📁 Inicializamos Google Drive Provider con instancia autorizada
-        const drive = googleapis_1.google.drive({ version: 'v3', auth: oauth2Client });
-        const provider = (0, providerFactory_1.providerFactory)('google', email, drive); // email aún necesario para nombre visible de carpeta
-        // 🗂️ Creamos carpeta raíz de proyecto (si no existe ya) → "Root - {email} / {projectId}"
-        const folderId = await provider.createFolder(email, projectId);
-        // Log después de crear la carpeta en Drive
-        console.log('[OAuth] Drive folder created or found', { folderId, email, projectId });
-        // 🧪 Logging defensivo: detecta si faltan `refresh_token` o `expiry_date`
-        const missing = [];
-        if (!tokens.refresh_token)
-            missing.push("refresh_token");
-        if (!tokens.expiry_date)
-            missing.push("expiry_date");
-        if (missing.length > 0) {
-            console.warn(`[OAuth] Missing token fields: ${missing.join(", ")} — user: ${email}, project: ${projectId}`);
-        }
-        // 💾 Guardamos token, folderId y metadatos en Firestore bajo `/users/{userId}/tokens/{projectId}.json`
-        await (0, saveOAuthData_1.saveOAuthData)({
-            userId,
-            projectId,
-            accessToken: tokens.access_token,
-            folderId,
-            refreshToken: tokens.refresh_token ?? undefined, // null → undefined
-            expiresAt: tokens.expiry_date ?? undefined // null → undefined
-        });
-        // Log antes de retornar la respuesta JSON
-        console.log('[OAuth] Callback successful, responding to client', {
-            userId,
-            email,
-            folderId,
-            projectId
-        });
-        // ✅ Confirmamos al frontend (respuesta temporal para pruebas)
-        return res.status(200).json({
-            message: 'OAuth callback successful',
-            userId,
-            email,
-            folderId
-        });
     }
     catch (error) {
-        console.error('OAuth callback error:', error);
-        return res.status(500).send('Internal Server Error during OAuth callback');
+        console.error('❌ Error in OAuth callback:', error);
+        console.error('❌ Error details:', {
+            name: error.name,
+            message: error.message,
+            stack: error.stack
+        });
+        return res.status(500).json({
+            success: false,
+            message: "OAuth callback failed",
+            error: error instanceof Error ? error.message : 'Unknown error'
+        });
     }
 };
-exports.oauthCallbackHandler = oauthCallbackHandler;
+exports.callback = callback;

@@ -1,5 +1,6 @@
 import { google, oauth2_v2 } from 'googleapis';
 import { OAuth2Client } from 'google-auth-library';
+import { getOAuthSecrets } from '../services/secretManager';
 
 /**
  * Configuración OAuth por proyecto (MVP / Módulo).
@@ -14,17 +15,23 @@ import { OAuth2Client } from 'google-auth-library';
  */
 
 // 🔐 Configuración modular por producto
-const oauthConfigs: Record<string, {
-  clientId: string;
-  clientSecret: string;
-  redirectUri: string;
-}> = {
-  yeka: {
-    clientId: process.env.CLIENT_ID!,
-    clientSecret: process.env.CLIENT_SECRET!,
-    redirectUri: process.env.YEKA_REDIRECT_URI!,
-  },
-  // Agrega más project_ids aquí si usas otros productos
+const getOAuthConfig = async (projectId: string) => {
+  try {
+    // Intentar obtener desde Secret Manager
+    const secrets = await getOAuthSecrets();
+    return {
+      clientId: secrets.clientId,
+      clientSecret: secrets.clientSecret,
+      redirectUri: secrets.redirectUri,
+    };
+  } catch (error) {
+    // Fallback a variables de entorno
+    return {
+      clientId: process.env.CLIENT_ID!,
+      clientSecret: process.env.CLIENT_SECRET!,
+      redirectUri: process.env.YEKA_REDIRECT_URI!,
+    };
+  }
 };
 
 // 📤 Scopes que solicitamos al usuario al hacer login
@@ -35,8 +42,8 @@ export const OAUTH_SCOPES = [
 ];
 
 // 🔄 Devuelve un cliente OAuth configurado para el producto correspondiente
-export const getOAuthClient = (projectId: string): OAuth2Client => {
-  const config = oauthConfigs[projectId];
+export const getOAuthClient = async (projectId: string): Promise<OAuth2Client> => {
+  const config = await getOAuthConfig(projectId);
 
   if (!config) {
     throw new Error(`No OAuth config found for project_id: ${projectId}`);
@@ -51,7 +58,7 @@ export const getOAuthClient = (projectId: string): OAuth2Client => {
 
 // 🔁 Intercambia el código de autorización recibido por los tokens reales
 export const exchangeCodeForTokens = async (code: string, projectId: string) => {
-  const oauth2Client = getOAuthClient(projectId);
+  const oauth2Client = await getOAuthClient(projectId);
   const { tokens } = await oauth2Client.getToken(code);
   return tokens;
 };

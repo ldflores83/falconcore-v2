@@ -21,6 +21,26 @@
       ],
       "rewrites": [
         {
+          "source": "/onboardingaudit/api/**",
+          "function": "api",
+          "region": "us-central1"
+        },
+        {
+          "source": "/ignium/api/**",
+          "function": "api",
+          "region": "us-central1"
+        },
+        {
+          "source": "/jobpulse/api/**",
+          "function": "api",
+          "region": "us-central1"
+        },
+        {
+          "source": "/pulziohq/api/**",
+          "function": "api",
+          "region": "us-central1"
+        },
+        {
           "source": "/ignium/**",
           "destination": "/ignium/index.html"
         },
@@ -31,6 +51,27 @@
         {
           "source": "/pulziohq/**",
           "destination": "/pulziohq/index.html"
+        },
+        {
+          "source": "/onboardingaudit/login",
+          "destination": "/onboardingaudit/login/index.html"
+        },
+        {
+          "source": "/onboardingaudit/login/**",
+          "destination": "/onboardingaudit/login/index.html"
+ 
+       },
+        {
+          "source": "/onboardingaudit/admin",
+          "destination": "/onboardingaudit/admin/index.html"
+        },
+        {
+          "source": "/onboardingaudit/admin/**",
+          "destination": "/onboardingaudit/admin/index.html"
+        },
+        {
+          "source": "/onboardingaudit/**",
+          "destination": "/onboardingaudit/index.html"
         },
         {
           "source": "**",

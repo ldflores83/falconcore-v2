@@ -2,15 +2,28 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.DropboxProvider = void 0;
 class DropboxProvider {
-    constructor(accessToken) { }
-    async createFile() {
-        throw new Error('Dropbox createFile not implemented yet');
+    constructor() {
+        // Service Account se configura automáticamente
     }
-    async createFolder() {
-        throw new Error('Dropbox createFolder not implemented yet');
+    async createFolder(email, projectId) {
+        // Implementación para Dropbox
+        throw new Error('Dropbox provider not implemented yet');
     }
-    async deleteFile() {
-        throw new Error('Dropbox deleteFile not implemented yet');
+    async createFolderWithTokens(email, projectId, accessToken, refreshToken) {
+        // Implementación para Dropbox con tokens OAuth
+        throw new Error('Dropbox provider not implemented yet');
+    }
+    async uploadFile(params) {
+        // TODO: Implementar cuando se necesite Dropbox
+        throw new Error("Dropbox provider not implemented yet");
+    }
+    async createDocumentFromTemplate(params) {
+        // TODO: Implementar cuando se necesite Dropbox
+        throw new Error("Dropbox provider not implemented yet");
+    }
+    async getUsageStats(email, projectId) {
+        // TODO: Implementar cuando se necesite Dropbox
+        throw new Error("Dropbox provider not implemented yet");
     }
 }
 exports.DropboxProvider = DropboxProvider;

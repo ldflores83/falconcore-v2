@@ -8,6 +8,16 @@ export interface StorageProvider {
   createFolder(email: string, projectId: string): Promise<string>;
 
   /**
+   * Crea (o retorna) una carpeta usando tokens OAuth directamente
+   * @param email Correo del usuario, usado para crear carpeta raíz
+   * @param projectId ID del proyecto (ej. clientpulse, jobpulse)
+   * @param accessToken Token de acceso OAuth
+   * @param refreshToken Token de refresh OAuth (opcional)
+   * @returns folderId generado o encontrado
+   */
+  createFolderWithTokens(email: string, projectId: string, accessToken: string, refreshToken?: string): Promise<string>;
+
+  /**
    * Sube un archivo al proveedor de almacenamiento
    * @param folderId ID de la carpeta donde subir el archivo
    * @param filename Nombre del archivo

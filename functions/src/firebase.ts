@@ -1,26 +1,15 @@
-// src/firebase.ts
+// functions/src/firebase.ts
 
 import * as admin from 'firebase-admin';
-import { readFileSync, existsSync } from 'fs';
 
-let serviceAccount: any = null;
-const secretPath = '/secrets/firebase-admin-key/latest';
-if (existsSync(secretPath)) {
-  try {
-    serviceAccount = JSON.parse(readFileSync(secretPath, 'utf8'));
-  } catch (err) {
-    console.error('[firebase.ts] Error reading or parsing service account secret:', err);
-  }
-}
-
-console.log('[firebase.ts] INICIO de inicialización');
-
+// Inicializar Firebase Admin SDK si no está inicializado
 if (!admin.apps.length) {
-  admin.initializeApp(
-    serviceAccount
-      ? { credential: admin.credential.cert(serviceAccount), projectId: 'falconcore-v2' }
-      : { projectId: 'falconcore-v2' }
-  );
+  admin.initializeApp({
+    projectId: 'falconcore-v2',
+    // No especificar credential para usar la autenticación por defecto
+    // que funciona mejor con OAuth
+  });
 }
 
-export const db = admin.firestore();
+// Exportar instancia de Firestore
+export const db = admin.firestore(); 

@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getUserIdFromEmail = void 0;
+exports.debugHash = exports.getUserIdFromEmail = void 0;
 // /functions/src/utils/hash.ts
 const crypto_1 = __importDefault(require("crypto"));
 const getUserIdFromEmail = (email) => {
@@ -11,3 +11,9 @@ const getUserIdFromEmail = (email) => {
     return crypto_1.default.createHmac("sha256", salt).update(email).digest("hex");
 };
 exports.getUserIdFromEmail = getUserIdFromEmail;
+// Función temporal para debug
+const debugHash = (input) => {
+    console.log('🔧 Debug hash function called with:', input);
+    return input;
+};
+exports.debugHash = debugHash;

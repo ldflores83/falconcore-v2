@@ -2,17 +2,28 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.OneDriveProvider = void 0;
 class OneDriveProvider {
-    constructor(accessToken) {
-        // Inicialización futura del SDK o cliente de OneDrive
+    constructor() {
+        // Service Account se configura automáticamente
     }
-    async createFile() {
-        throw new Error('OneDrive createFile not implemented yet');
+    async createFolder(email, projectId) {
+        // Implementación para OneDrive
+        throw new Error('OneDrive provider not implemented yet');
     }
-    async createFolder() {
-        throw new Error('OneDrive createFolder not implemented yet');
+    async createFolderWithTokens(email, projectId, accessToken, refreshToken) {
+        // Implementación para OneDrive con tokens OAuth
+        throw new Error('OneDrive provider not implemented yet');
     }
-    async deleteFile() {
-        throw new Error('OneDrive deleteFile not implemented yet');
+    async uploadFile(params) {
+        // TODO: Implementar cuando se necesite OneDrive
+        throw new Error("OneDrive provider not implemented yet");
+    }
+    async createDocumentFromTemplate(params) {
+        // TODO: Implementar cuando se necesite OneDrive
+        throw new Error("OneDrive provider not implemented yet");
+    }
+    async getUsageStats(email, projectId) {
+        // TODO: Implementar cuando se necesite OneDrive
+        throw new Error("OneDrive provider not implemented yet");
     }
 }
 exports.OneDriveProvider = OneDriveProvider;

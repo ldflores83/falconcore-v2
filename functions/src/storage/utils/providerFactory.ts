@@ -1,16 +1,23 @@
-import { GoogleDriveProvider } from '../providers/GoogleDriveProvider';
-import type { StorageProvider } from '../interfaces/StorageProvider';
-import { drive_v3 } from 'googleapis';
+import { StorageProvider } from "../interfaces/StorageProvider";
+import { GoogleDriveProvider } from "../providers/GoogleDriveProvider";
+import { DropboxProvider } from "../providers/DropboxProvider";
+import { OneDriveProvider } from "../providers/OneDriveProvider";
 
-export function providerFactory(
-  provider: string,
-  accessToken: string,
-  drive: drive_v3.Drive
-): StorageProvider {
-  switch (provider) {
-    case 'google':
-      return new GoogleDriveProvider(accessToken, drive);
-    default:
-      throw new Error(`Unsupported provider: ${provider}`);
+export class StorageProviderFactory {
+  static createProvider(providerType: string): StorageProvider {
+    switch (providerType.toLowerCase()) {
+      case 'googledrive':
+      case 'google':
+        return new GoogleDriveProvider();
+      
+      case 'dropbox':
+        return new DropboxProvider();
+      
+      case 'onedrive':
+        return new OneDriveProvider();
+      
+      default:
+        throw new Error(`Unsupported storage provider: ${providerType}`);
+    }
   }
 }

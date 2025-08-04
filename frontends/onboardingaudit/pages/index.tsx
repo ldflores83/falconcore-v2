@@ -1,11 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import AuditForm from '../components/AuditForm';
 import SuccessMessage from '../components/SuccessMessage';
+import { initAnalytics } from '../lib/analytics';
 
 export default function OnboardingAudit() {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+
+  // Initialize analytics tracking
+  useEffect(() => {
+    initAnalytics('onboardingaudit');
+  }, []);
 
   const handleSubmit = (success: boolean, message: string) => {
     if (success) {
@@ -37,15 +43,26 @@ export default function OnboardingAudit() {
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
         <div className="text-center mb-12">
-          <a 
-            href="/" 
-            className="inline-flex items-center text-white/80 hover:text-white transition-colors mb-8"
-          >
-            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-            Back to UayLabs
-          </a>
+          <div className="flex justify-between items-center mb-8">
+            <a 
+              href="/" 
+              className="inline-flex items-center text-white/80 hover:text-white transition-colors"
+            >
+              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+              Back to UayLabs
+            </a>
+            
+            {/* Admin link - discreto */}
+            <a 
+              href="/onboardingaudit/login" 
+              className="text-xs text-white/40 hover:text-white/60 transition-colors"
+              title="Admin Panel"
+            >
+              Admin
+            </a>
+          </div>
           
           <div className="max-w-3xl mx-auto">
             <h1 className="text-4xl md:text-6xl font-bold text-white mb-6">

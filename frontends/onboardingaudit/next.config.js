@@ -3,10 +3,14 @@ const nextConfig = {
   output: 'export',
   trailingSlash: true,
   distDir: '../uaylabs/out/onboardingaudit',
-  assetPrefix: './',
+  assetPrefix: '/onboardingaudit',
   basePath: '',
   images: {
     unoptimized: true
+  },
+  // Configurar para generar archivos con nombres específicos
+  generateBuildId: async () => {
+    return 'onboardingaudit'
   }
 }
 

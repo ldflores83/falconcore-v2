@@ -1,54 +1,109 @@
-import { db } from "../firebase";
+// functions/src/oauth/getOAuthCredentials.ts
+
+import { google } from 'googleapis';
+import * as admin from 'firebase-admin';
+import { getOAuthConfig } from '../config';
+
+// Función para obtener Firestore de forma lazy
+const getFirestore = () => {
+  if (!admin.apps.length) {
+    // Inicializar Firebase sin credenciales de servicio automáticas
+    // para evitar conflictos con OAuth
+    admin.initializeApp({
+      projectId: 'falconcore-v2',
+      // No especificar credential para usar la autenticación por defecto
+      // que funciona mejor con OAuth
+    });
+  }
+  return admin.firestore();
+};
 
 export interface OAuthCredentials {
   accessToken: string;
   refreshToken?: string;
-  expiresAt?: number;
-  folderId: string;
+  expiryDate?: number;
+  scope?: string;
+  tokenType?: string;
+  createdAt: Date;
   updatedAt: Date;
 }
 
-export const getOAuthCredentials = async (userId: string, projectId: string): Promise<OAuthCredentials | null> => {
+export const getOAuthCredentials = async (userId: string = 'onboardingaudit_user'): Promise<OAuthCredentials | null> => {
   try {
-    const docRef = db.collection("oauthData").doc(`${userId}_${projectId}`);
-    const doc = await docRef.get();
+    const db = getFirestore();
+    const doc = await db.collection('oauth_credentials').doc(userId).get();
     
     if (!doc.exists) {
+      console.log('❌ No se encontraron credenciales OAuth para:', userId);
       return null;
     }
-    
+
     const data = doc.data();
-    return {
-      accessToken: data?.accessToken,
-      refreshToken: data?.refreshToken,
-      expiresAt: data?.expiresAt,
-      folderId: data?.folderId,
-      updatedAt: data?.updatedAt?.toDate() || new Date(),
-    };
-  } catch (err) {
-    console.error('[getOAuthCredentials] Firestore read error:', err);
-    throw err;
+    if (!data?.accessToken) {
+      console.log('❌ Credenciales OAuth incompletas para:', userId);
+      return null;
+    }
+
+    console.log('✅ Credenciales OAuth obtenidas para:', userId);
+    return data as OAuthCredentials;
+
+  } catch (error) {
+    console.error('❌ Error obteniendo credenciales OAuth:', error);
+    return null;
   }
 };
 
-export const getValidAccessToken = async (userId: string, projectId: string): Promise<string | null> => {
+export const getValidAccessToken = async (userId: string = 'onboardingaudit_user'): Promise<string | null> => {
   try {
-    const credentials = await getOAuthCredentials(userId, projectId);
+    const credentials = await getOAuthCredentials(userId);
     
     if (!credentials) {
       return null;
     }
-    
+
     // Verificar si el token ha expirado
-    if (credentials.expiresAt && Date.now() > credentials.expiresAt) {
-      // TODO: Implementar refresh token logic
-      console.warn('Access token expired, refresh logic not implemented yet');
-      return null;
+    if (credentials.expiryDate && Date.now() > credentials.expiryDate) {
+      console.log('⚠️ Token expirado, intentando refresh...');
+      
+      // Intentar refresh del token
+      const oauthConfig = await getOAuthConfig();
+      const oauth2Client = new google.auth.OAuth2(
+        oauthConfig.clientId,
+        oauthConfig.clientSecret,
+        oauthConfig.redirectUri
+      );
+
+      oauth2Client.setCredentials({
+        access_token: credentials.accessToken,
+        refresh_token: credentials.refreshToken,
+        expiry_date: credentials.expiryDate
+      });
+
+      try {
+        const { credentials: newCredentials } = await oauth2Client.refreshAccessToken();
+        
+        if (newCredentials.access_token) {
+          // Actualizar tokens en Firestore
+          const db = getFirestore();
+          await db.collection('oauth_credentials').doc(userId).update({
+            accessToken: newCredentials.access_token,
+            expiryDate: newCredentials.expiry_date,
+            updatedAt: new Date()
+          });
+
+          console.log('✅ Token refrescado exitosamente');
+          return newCredentials.access_token;
+        }
+      } catch (refreshError) {
+        console.error('❌ Error refrescando token:', refreshError);
+        return null;
+      }
     }
-    
+
     return credentials.accessToken;
-  } catch (err) {
-    console.error('[getValidAccessToken] Error:', err);
+
+  } catch (error) {
+    console.error('❌ Error obteniendo access token válido:', error);
     return null;
   }
 }; 

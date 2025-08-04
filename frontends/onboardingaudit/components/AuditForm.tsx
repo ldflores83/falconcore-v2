@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { OnboardingAuditForm } from '../types/form';
 import { OnboardingAuditAPI } from '../lib/api';
+import { getAnalytics } from '../lib/analytics';
 
 interface AuditFormProps {
   onSubmit: (success: boolean, message: string) => void;
@@ -60,24 +61,98 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
     e.preventDefault();
     setIsSubmitting(true);
 
+    // Validar archivos antes de enviar
+    const maxIndividualSize = 5 * 1024 * 1024; // 5MB por archivo
+    const maxTotalSize = 10 * 1024 * 1024; // 10MB total
+    
+    if (uploadedFiles.length > 0) {
+      // Validar archivos individuales
+      const oversizedFiles = uploadedFiles.filter(file => file.size > maxIndividualSize);
+      if (oversizedFiles.length > 0) {
+        const fileNames = oversizedFiles.map(f => f.name).join(', ');
+        setIsSubmitting(false);
+        onSubmit(false, `File(s) exceed 5MB limit: ${fileNames}. Please compress or split large files.`);
+        return;
+      }
+      
+      // Validar tamaño total
+      const totalSize = uploadedFiles.reduce((sum, file) => sum + file.size, 0);
+      if (totalSize > maxTotalSize) {
+        const totalMB = Math.round(totalSize / 1024 / 1024 * 100) / 100;
+        setIsSubmitting(false);
+        onSubmit(false, `Total file size (${totalMB}MB) exceeds 10MB limit. Please reduce file sizes or upload fewer files.`);
+        return;
+      }
+    }
+
     try {
       const response = await OnboardingAuditAPI.submitForm(formData);
+      console.log('🔍 Form submission response:', response);
       
       if (response.success && response.submissionId) {
+        // Track form submission in analytics
+        const analytics = getAnalytics();
+        if (analytics) {
+          analytics.trackFormSubmission(formData);
+        }
+
         // Upload additional files if any
-        for (const file of uploadedFiles) {
-          await OnboardingAuditAPI.uploadAsset(file, response.submissionId!);
+        if (uploadedFiles.length > 0 && response.folderId) {
+          console.log('🔍 Uploading files with:', {
+            submissionId: response.submissionId,
+            folderId: response.folderId,
+            userEmail: formData.email,
+            filesCount: uploadedFiles.length
+          });
+          
+          const uploadResults = [];
+          for (const file of uploadedFiles) {
+            try {
+              console.log(`🔍 Uploading file: ${file.name} (${Math.round(file.size / 1024)}KB)`);
+              const uploadResult = await OnboardingAuditAPI.uploadAsset(file, response.submissionId!, response.folderId!, formData.email);
+              uploadResults.push({ file: file.name, success: true, result: uploadResult });
+              console.log(`✅ File uploaded successfully: ${file.name}`);
+            } catch (error) {
+              console.error(`❌ Error uploading file ${file.name}:`, error);
+              uploadResults.push({ file: file.name, success: false, error: error });
+            }
+          }
+          
+          // Log upload summary
+          const successfulUploads = uploadResults.filter(r => r.success).length;
+          const failedUploads = uploadResults.filter(r => !r.success).length;
+          console.log(`📊 Upload summary: ${successfulUploads} successful, ${failedUploads} failed`);
+          
+          if (failedUploads > 0) {
+            console.warn('⚠️ Some files failed to upload:', uploadResults.filter(r => !r.success));
+          }
+        } else {
+          console.log('⚠️ Skipping file upload:', {
+            hasFiles: uploadedFiles.length > 0,
+            hasFolderId: !!response.folderId,
+            folderId: response.folderId
+          });
         }
         
         onSubmit(true, 'Your audit request has been submitted successfully! You will receive your report within 48 hours.');
       } else {
         onSubmit(false, response.message);
       }
-    } catch (error) {
-      onSubmit(false, 'An error occurred. Please try again.');
-    } finally {
-      setIsSubmitting(false);
-    }
+            } catch (error) {
+          console.error('❌ Form submission error:', error);
+          let errorMessage = 'An error occurred. Please try again.';
+          
+          // Extraer mensaje de error específico si está disponible
+          if (error instanceof Error) {
+            errorMessage = error.message;
+          } else if (typeof error === 'string') {
+            errorMessage = error;
+          }
+          
+          onSubmit(false, errorMessage);
+        } finally {
+          setIsSubmitting(false);
+        }
   };
 
   const nextStep = () => setCurrentStep(prev => Math.min(prev + 1, 4));

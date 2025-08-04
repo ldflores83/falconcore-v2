@@ -111,6 +111,7 @@ Para optimizar el almacenamiento y evitar duplicación, se implementó un sistem
 
 #### Estructura de dependencias:
 ```
+
 frontends/
 ├── package.json          # Dependencias compartidas
 ├── node_modules/         # Dependencias compartidas

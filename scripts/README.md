@@ -4,6 +4,37 @@ Este directorio contiene scripts útiles para el mantenimiento del proyecto.
 
 ## 🚀 Scripts de Build y Deploy
 
+### ⭐ RECOMENDADO: quick-build.ps1
+**Script simple y confiable que funciona sin errores.**
+
+**Uso:**
+```powershell
+# Build y deploy de todos los frontends
+.\scripts\quick-build.ps1
+```
+
+**Qué hace:**
+- ✅ Build de uaylabs (estructura base)
+- ✅ Build de ignium
+- ✅ Build de jobpulse  
+- ✅ Build de pulziohq
+- ✅ Build de onboardingaudit
+- ✅ Deploy hosting (todos los productos)
+
+### build-all-products.ps1
+**Script completo que incluye también el deploy de functions (backend).**
+
+**Uso:**
+```powershell
+# Build y deploy completo (frontends + backend)
+.\scripts\build-all-products.ps1
+```
+
+**Qué hace:**
+- ✅ Todo lo que hace quick-build.ps1
+- ✅ Build de functions (backend)
+- ✅ Deploy de functions (backend)
+
 ### build-and-deploy.bat
 Script de batch para construir y desplegar todos los frontends.
 
@@ -99,72 +130,39 @@ Script de batch avanzado con opciones.
 
 ## 📋 Cuándo usar los scripts
 
-### ✅ Usar limpieza básica cuando:
-- Los builds están lentos
-- Hay problemas de cache
-- Quieres liberar espacio
-- Antes de hacer deploy
-
-### ✅ Usar limpieza completa cuando:
-- Hay problemas de dependencias
-- Quieres reinstalar todo
-- Después de cambios importantes
-- Para debugging
-
-## 🔄 Después de la limpieza
-
-### Regenerar builds:
-```bash
-# En cada proyecto
-cd frontends/ignium && npm run build
-cd ../jobpulse && npm run build
-cd ../pulziohq && npm run build
-cd ../uaylabs && npm run build
+### Para desarrollo diario:
+```powershell
+# Script recomendado - rápido y confiable
+.\scripts\quick-build.ps1
 ```
 
-### Reinstalar dependencias (si usaste -Force):
-```bash
-cd frontends
-npm install
+### Para deploy completo (frontends + backend):
+```powershell
+# Script completo con backend
+.\scripts\build-all-products.ps1
 ```
 
-## 📊 Qué se limpia
-
-### Archivos eliminados:
-- `.next/` - Cache de Next.js
-- `package-lock.json` - Archivos de lock duplicados
-- `setup.md` - Documentación obsoleta
-- `TECHNICAL_SNAPSHOT.md` - Snapshots obsoletos
-- `docs/` - Documentación interna obsoleta
-
-### Archivos preservados:
-- `node_modules/` - Dependencias compartidas
-- `uaylabs/out/` - Builds centralizados
-- Archivos de configuración
-- Código fuente
-
-## 🚀 Comandos rápidos
-
+### Para limpiar cache:
 ```bash
-# Build y deploy completo
-.\scripts\build-and-deploy.bat
-
-# Limpieza rápida
+# Limpieza básica
 .\scripts\clean-cache.bat
-
-# Limpieza completa
-powershell -ExecutionPolicy Bypass -File ".\scripts\clean-frontend-cache.ps1" -Force
-
-# Solo build (sin deploy)
-.\scripts\build-and-deploy.bat -BuildOnly
-
-# Solo deploy (si ya están construidos)
-.\scripts\build-and-deploy.bat -DeployOnly
 ```
 
-## ⚠️ Notas importantes
+## 🎯 Recomendaciones
 
-1. **Siempre ejecuta desde la raíz del proyecto**
-2. **Los builds se regeneran automáticamente cuando sea necesario**
-3. **El `node_modules` compartido se preserva por defecto**
-4. **Los builds en `uaylabs/out/` se mantienen para deployment** 
+1. **Para la mayoría de casos**: Usa `quick-build.ps1`
+2. **Para deploy completo**: Usa `build-all-products.ps1`
+3. **Para limpiar cache**: Usa `clean-cache.bat`
+4. **Evita scripts complejos**: Los scripts con muchas opciones pueden tener errores
+
+## 📊 Estado de los Scripts
+
+### ✅ Funcionando Correctamente
+- `quick-build.ps1` - Script recomendado
+- `build-all-products.ps1` - Script completo
+- `clean-cache.bat` - Limpieza básica
+
+### ⚠️ Scripts con Problemas Conocidos
+- `build-and-deploy.ps1` - Puede tener errores de dependencias
+- `build-and-deploy.bat` - Versión compleja que puede fallar
+- Scripts individuales - Pueden tener problemas de rutas 

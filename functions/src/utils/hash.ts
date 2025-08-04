@@ -5,3 +5,9 @@ export const getUserIdFromEmail = (email: string): string => {
   const salt = process.env.SYSTEM_SALT || "falconcore_default_salt";
   return crypto.createHmac("sha256", salt).update(email).digest("hex");
 };
+
+// Función temporal para debug
+export const debugHash = (input: string): string => {
+  console.log('🔧 Debug hash function called with:', input);
+  return input;
+};
