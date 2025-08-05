@@ -40,8 +40,8 @@ export default function AnalyticsDashboard({ projectId }: AnalyticsDashboardProp
     setError('');
 
     try {
-      // Usar URL directa de la función api para analytics
-      const response = await fetch('https://api-fu54nvsqfa-uc.a.run.app/api/admin/analytics', {
+      // Usar URL del dominio principal para analytics
+      const response = await fetch('https://uaylabs.web.app/onboardingaudit/api/admin/analytics', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

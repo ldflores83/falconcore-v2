@@ -11,12 +11,13 @@ interface Submission {
   targetUser: string;
   mainGoal: string;
   createdAt: string;
-  status: 'pending' | 'in_progress' | 'completed';
+  status: 'pending' | 'synced' | 'in_progress' | 'completed';
   folderId?: string;
 }
 
 export default function AdminPanel() {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
+  const [pendingCount, setPendingCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [userEmail, setUserEmail] = useState('');
@@ -42,8 +43,18 @@ export default function AdminPanel() {
       });
 
       if (!authResponse.ok) {
-        router.push('/onboardingaudit/login');
-        return;
+        const authError = await authResponse.json();
+        console.log('❌ Auth check failed:', authError);
+        
+        if (authError.requiresLogin) {
+          // Redirigir al login si requiere autenticación
+          router.push('/onboardingaudit/login');
+          return;
+        } else {
+          setError('Access denied. Only authorized administrators can view this panel.');
+          setIsLoading(false);
+          return;
+        }
       }
 
       const authData = await authResponse.json();
@@ -71,6 +82,7 @@ export default function AdminPanel() {
       if (submissionsResponse.ok) {
         const data = await submissionsResponse.json();
         setSubmissions(data.submissions || []);
+        setPendingCount(data.pendingCount || 0);
       } else {
         setError('Error loading submissions data.');
       }
@@ -100,9 +112,66 @@ export default function AdminPanel() {
     }
   };
 
+  const handleStatusUpdate = async (submissionId: string, newStatus: string) => {
+    try {
+      const response = await fetch('https://uaylabs.web.app/onboardingaudit/api/admin/updateSubmissionStatus', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          projectId: 'onboardingaudit',
+          userId: 'luisdaniel883@gmail.com_onboardingaudit',
+          submissionId,
+          newStatus
+        })
+      });
+
+      if (response.ok) {
+        // Recargar datos después de actualizar estado
+        await checkAuthAndLoadData();
+      } else {
+        setError('Error updating submission status.');
+      }
+    } catch (error) {
+      console.error('Status update error:', error);
+      setError('Failed to update submission status.');
+    }
+  };
+
+  const handleProcessSubmissions = async () => {
+    try {
+      setError('');
+      const response = await fetch('https://uaylabs.web.app/onboardingaudit/api/admin/processSubmissions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          projectId: 'onboardingaudit',
+          userId: 'luisdaniel883@gmail.com_onboardingaudit'
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('✅ Submissions processed:', result);
+        // Recargar datos después de procesar
+        await checkAuthAndLoadData();
+      } else {
+        const errorData = await response.json();
+        setError(`Error processing submissions: ${errorData.message || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Process submissions error:', error);
+      setError('Failed to process submissions.');
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     const statusConfig = {
       pending: { color: 'bg-yellow-500', text: 'Pending' },
+      synced: { color: 'bg-purple-500', text: 'Synced' },
       in_progress: { color: 'bg-blue-500', text: 'In Progress' },
       completed: { color: 'bg-green-500', text: 'Completed' }
     };
@@ -188,16 +257,22 @@ export default function AdminPanel() {
         {activeTab === 'submissions' ? (
           <>
             {/* Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
               <div className="card text-center">
                 <div className="text-2xl font-bold text-white">{submissions.length}</div>
                 <div className="text-sm text-gray-300">Total Submissions</div>
               </div>
               <div className="card text-center">
                 <div className="text-2xl font-bold text-yellow-400">
-                  {submissions.filter(s => s.status === 'pending').length}
+                  {pendingCount}
                 </div>
                 <div className="text-sm text-gray-300">Pending</div>
+              </div>
+              <div className="card text-center">
+                <div className="text-2xl font-bold text-purple-400">
+                  {submissions.filter(s => s.status === 'synced').length}
+                </div>
+                <div className="text-sm text-gray-300">Synced</div>
               </div>
               <div className="card text-center">
                 <div className="text-2xl font-bold text-blue-400">
@@ -217,12 +292,21 @@ export default function AdminPanel() {
             <div className="card">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-xl font-semibold text-white">Audit Submissions</h2>
-                <button
-                  onClick={checkAuthAndLoadData}
-                  className="btn-secondary text-sm px-4 py-2"
-                >
-                  Refresh
-                </button>
+                <div className="flex space-x-3">
+                  <button
+                    onClick={handleProcessSubmissions}
+                    disabled={pendingCount === 0}
+                    className="btn-primary text-sm px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Process Pending ({pendingCount})
+                  </button>
+                  <button
+                    onClick={checkAuthAndLoadData}
+                    className="btn-secondary text-sm px-4 py-2"
+                  >
+                    Refresh
+                  </button>
+                </div>
               </div>
 
           {submissions.length === 0 ? (
@@ -282,12 +366,33 @@ export default function AdminPanel() {
                           >
                             View Files
                           </button>
-                          <button
-                            className="text-green-400 hover:text-green-300 text-sm"
-                            onClick={() => {/* TODO: Implement report generation */}}
-                          >
-                            Generate Report
-                          </button>
+                          {submission.status === 'pending' && (
+                            <button
+                              className="text-purple-400 hover:text-purple-300 text-sm"
+                              onClick={() => handleStatusUpdate(submission.id, 'synced')}
+                            >
+                              Mark Synced
+                            </button>
+                          )}
+                          {submission.status === 'synced' && (
+                            <button
+                              className="text-yellow-400 hover:text-yellow-300 text-sm"
+                              onClick={() => handleStatusUpdate(submission.id, 'in_progress')}
+                            >
+                              Start Work
+                            </button>
+                          )}
+                          {submission.status === 'in_progress' && (
+                            <button
+                              className="text-green-400 hover:text-green-300 text-sm"
+                              onClick={() => handleStatusUpdate(submission.id, 'completed')}
+                            >
+                              Mark Complete
+                            </button>
+                          )}
+                          {submission.status === 'completed' && (
+                            <span className="text-green-400 text-sm">✓ Completed</span>
+                          )}
                         </div>
                       </td>
                     </tr>

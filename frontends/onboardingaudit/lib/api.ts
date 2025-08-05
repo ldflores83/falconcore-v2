@@ -40,6 +40,14 @@ export interface DocumentGenerationResponse {
   message: string;
 }
 
+export interface SubmissionStatusResponse {
+  success: boolean;
+  canSubmit: boolean;
+  pendingCount: number;
+  maxPending: number;
+  message?: string;
+}
+
 export class OnboardingAuditAPI {
   private static generateClientId(): string {
     return `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -53,8 +61,20 @@ export class OnboardingAuditAPI {
         clientId: this.generateClientId(),
       });
       return response.data;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error submitting form:', error);
+      
+      // If there's a server response with a specific message, use it
+      if (error.response && error.response.data && error.response.data.message) {
+        throw new Error(error.response.data.message);
+      }
+      
+      // If it's a network error, use specific message
+      if (error.code === 'NETWORK_ERROR' || error.message.includes('Network Error')) {
+        throw new Error('Network error. Please check your internet connection and try again.');
+      }
+      
+      // Generic error as fallback
       throw new Error('Failed to submit form. Please try again.');
     }
   }
@@ -105,6 +125,20 @@ export class OnboardingAuditAPI {
     } catch (error) {
       console.error('Error generating document:', error);
       throw new Error('Failed to generate document. Please try again.');
+    }
+  }
+
+  static async checkSubmissionStatus(): Promise<SubmissionStatusResponse> {
+    try {
+      console.log('🔍 API: Calling checkSubmissionStatus...');
+      const response = await api.post('/api/public/checkSubmissionStatus', {
+        projectId: 'onboardingaudit',
+      });
+      console.log('📊 API: Response received:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('❌ API: Error checking submission status:', error);
+      throw new Error('Failed to check submission status. Please try again.');
     }
   }
 

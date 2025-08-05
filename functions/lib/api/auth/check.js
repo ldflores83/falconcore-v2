@@ -22,17 +22,21 @@ const check = async (req, res) => {
         // Obtener credenciales OAuth
         const credentials = await (0, getOAuthCredentials_1.getOAuthCredentials)(userId);
         if (!credentials) {
+            console.log('❌ No OAuth credentials found for:', userId);
             return res.status(401).json({
                 success: false,
-                message: "Not authenticated. Please login first."
+                message: "Not authenticated. Please login first.",
+                requiresLogin: true
             });
         }
         // Verificar que el token es válido
         const validToken = await (0, getOAuthCredentials_1.getValidAccessToken)(userId);
         if (!validToken) {
+            console.log('❌ Invalid or expired token for:', userId);
             return res.status(401).json({
                 success: false,
-                message: "Invalid or expired token. Please login again."
+                message: "Invalid or expired token. Please login again.",
+                requiresLogin: true
             });
         }
         console.log('✅ OAuth check successful:', {

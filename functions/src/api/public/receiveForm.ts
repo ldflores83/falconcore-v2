@@ -3,6 +3,7 @@
 import { Request, Response } from "express";
 import { GoogleDriveProvider } from "../../storage/providers/GoogleDriveProvider";
 import { getOAuthCredentials } from "../../oauth/getOAuthCredentials";
+import { uploadToStorage } from "../../services/storage";
 import * as admin from 'firebase-admin';
 
 // Función para obtener Firestore de forma lazy
@@ -89,6 +90,52 @@ export const receiveForm = async (req: Request, res: Response) => {
     const projectIdFinal = projectId || 'onboardingaudit';
     const clientIdFinal = clientId || formData.email.split('@')[0];
 
+    // Verificar si el usuario ya tiene una submission pendiente
+    const adminUserId = `luisdaniel883@gmail.com_${projectIdFinal}`;
+    const credentials = await getOAuthCredentials(adminUserId);
+    
+    if (credentials) {
+      const provider = new GoogleDriveProvider();
+      const adminFolderId = await provider.createFolderWithTokens(
+        'luisdaniel883@gmail.com', 
+        projectIdFinal, 
+        credentials.accessToken,
+        credentials.refreshToken
+      );
+      
+      // Listar todas las subcarpetas para verificar submissions existentes
+      const folders = await provider.listFilesWithTokens(
+        adminFolderId, 
+        credentials.accessToken,
+        credentials.refreshToken
+      );
+      
+      // Verificar si ya existe una submission de este email
+      const existingSubmission = folders.find(folder => 
+        folder.mimeType === 'application/vnd.google-apps.folder' && 
+        folder.name.includes(formData.email)
+      );
+      
+                if (existingSubmission) {
+            return res.status(400).json({
+              success: false,
+              message: "You already have a pending request. Please wait for it to be completed before submitting another."
+            });
+          }
+
+      // Verificar límite de submissions pendientes (máximo 6)
+      const pendingSubmissions = folders.filter(folder => 
+        folder.mimeType === 'application/vnd.google-apps.folder'
+      );
+      
+                if (pendingSubmissions.length >= 6) {
+            return res.status(400).json({
+              success: false,
+              message: "We are currently working on pending requests. Please try again later when more slots become available."
+            });
+          }
+    }
+
     console.log('📝 Form submission received:', {
       submissionId,
       email: formData.email,
@@ -98,78 +145,68 @@ export const receiveForm = async (req: Request, res: Response) => {
       timestamp: new Date().toISOString(),
     });
 
-    // Usar credenciales OAuth del administrador (luisdaniel883@gmail.com)
-    const adminUserId = `luisdaniel883@gmail.com_${projectIdFinal}`;
-    const credentials = await getOAuthCredentials(adminUserId);
-    
-    if (!credentials) {
-      console.log('⚠️ No OAuth credentials found for admin user:', adminUserId);
-      return res.status(500).json({
-        success: false,
-        message: "Service temporarily unavailable. Please try again later.",
-      });
-    }
-
-    // Crear carpeta para el formulario usando credenciales del admin
-    console.log('🔧 Creating folder for form submission...');
-    const provider = new GoogleDriveProvider();
+    // Guardar en Firestore primero (sin depender de OAuth)
+    console.log('💾 Saving submission to Firestore...');
+    const db = getFirestore();
     
     try {
-      // Usar las credenciales específicas del admin
-      const adminFolderId = await provider.createFolderWithTokens(
-        'luisdaniel883@gmail.com', 
-        projectIdFinal, 
-        credentials.accessToken,
-        credentials.refreshToken
-      );
+      // Crear documento en Firestore
+      const submissionData = {
+        ...formData,
+        submissionId,
+        projectId: projectIdFinal,
+        clientId: clientIdFinal,
+        status: 'pending',
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+
+      const docRef = await db.collection('onboardingaudit_submissions').add(submissionData);
       
-      // Crear carpeta específica para este formulario
-      const formFolderName = `${formData.productName}_${formData.email}_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}`;
-      const formFolderId = await provider.findOrCreateFolder(formFolderName, adminFolderId);
-      
-      console.log('✅ Form folder created:', {
-        adminFolderId,
-        formFolderName,
-        formFolderId
-      });
+      console.log('✅ Submission saved to Firestore:', docRef.id);
 
       // Generar documento del formulario
       console.log('📄 Generating form document...');
       const documentContent = generateFormDocument(formData);
       
-      // Subir documento al Drive
+      // Subir documento a Cloud Storage
       const fileName = `Onboarding_Audit_${formData.productName}_${new Date().toISOString().slice(0, 10)}.md`;
       const contentBuffer = Buffer.from(documentContent, 'utf-8');
-      const uploadResult = await provider.uploadFile({
-        folderId: formFolderId,
-        filename: fileName,
-        contentBuffer: contentBuffer,
-        mimeType: 'text/markdown'
-      });
       
-      console.log('✅ Form document uploaded to Drive:', {
-        fileName,
-        fileId: uploadResult.id,
-        folderId: formFolderId,
-        webViewLink: uploadResult.webViewLink
+      const storagePath = `submissions/${docRef.id}/${fileName}`;
+      const storageUrl = await uploadToStorage(
+        'falconcore-onboardingaudit-uploads',
+        storagePath,
+        contentBuffer,
+        'text/markdown'
+      );
+
+      // Actualizar Firestore con la URL del documento y preparar para imágenes
+      await docRef.update({
+        documentUrl: storageUrl,
+        documentPath: storagePath,
+        hasAttachments: false, // Se actualizará cuando se suban imágenes
+        attachments: [] // Array para guardar info de imágenes
       });
+
+      console.log('✅ Form document uploaded to Cloud Storage:', storageUrl);
 
       // Respuesta exitosa
       const response: ReceiveFormResponse = {
         success: true,
-        submissionId,
-        folderId: formFolderId,
-        message: "Form submitted successfully. Document created in Google Drive.",
+        submissionId: docRef.id,
+        folderId: storagePath,
+        message: "Form submitted successfully. Your audit request has been received and will be processed within 48 hours.",
       };
 
       return res.status(200).json(response);
 
     } catch (error) {
-      console.error('❌ Error creating folder:', error);
+      console.error('❌ Error saving submission:', error);
       
       return res.status(500).json({
         success: false,
-        message: "Failed to create folder. Please try again later.",
+        message: "Failed to save submission. Please try again later.",
         error: error instanceof Error ? error.message : 'Unknown error'
       });
     }

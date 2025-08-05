@@ -1,9 +1,51 @@
 "use strict";
 // /functions/src/api/public/uploadAsset.ts
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.uploadAsset = void 0;
-const GoogleDriveProvider_1 = require("../../storage/providers/GoogleDriveProvider");
-const getOAuthCredentials_1 = require("../../oauth/getOAuthCredentials");
+const storage_1 = require("../../services/storage");
+const admin = __importStar(require("firebase-admin"));
+// Función para obtener Firestore de forma lazy
+const getFirestore = () => {
+    if (!admin.apps.length) {
+        admin.initializeApp({
+            projectId: 'falconcore-v2',
+        });
+    }
+    return admin.firestore();
+};
 const uploadAsset = async (req, res) => {
     try {
         console.log('🔍 uploadAsset handler called with body:', JSON.stringify(req.body, null, 2));
@@ -32,17 +74,17 @@ const uploadAsset = async (req, res) => {
                 message: `Missing required fields: ${missingFields.join(', ')}`
             });
         }
-        // Validar límite de tamaño total (10MB) y archivos individuales (5MB)
+        // Validar límite de tamaño total (10MB) y archivos individuales (10MB)
         const totalSize = files.reduce((sum, file) => sum + file.size, 0);
         const maxTotalSize = 10 * 1024 * 1024; // 10MB total
-        const maxIndividualSize = 5 * 1024 * 1024; // 5MB por archivo
+        const maxIndividualSize = 10 * 1024 * 1024; // 10MB por archivo
         // Validar archivos individuales
         const oversizedFiles = files.filter(file => file.size > maxIndividualSize);
         if (oversizedFiles.length > 0) {
             const fileNames = oversizedFiles.map(f => f.filename).join(', ');
             return res.status(400).json({
                 success: false,
-                message: `File(s) exceed 5MB limit: ${fileNames}. Please compress or split large files.`
+                message: `File(s) exceed 10MB limit: ${fileNames}. Please compress or split large files.`
             });
         }
         // Validar tamaño total
@@ -61,66 +103,53 @@ const uploadAsset = async (req, res) => {
             totalSize,
             timestamp: new Date().toISOString(),
         });
-        // Usar credenciales del administrador para subir archivos
-        const adminEmail = 'luisdaniel883@gmail.com';
-        const adminUserId = `${adminEmail}_${projectId || 'onboardingaudit'}`;
-        // Obtener access token válido (con refresh automático si es necesario)
-        const accessToken = await (0, getOAuthCredentials_1.getValidAccessToken)(adminUserId);
-        if (!accessToken) {
-            console.log('⚠️ No valid OAuth credentials found for admin:', adminUserId);
-            return res.status(401).json({
-                success: false,
-                message: "Admin OAuth authentication required. Please setup admin credentials first.",
-            });
-        }
-        // Obtener credenciales completas para el refresh token
-        const credentials = await (0, getOAuthCredentials_1.getOAuthCredentials)(adminUserId);
-        if (!credentials) {
-            console.log('⚠️ No OAuth credentials found for admin:', adminUserId);
-            return res.status(401).json({
-                success: false,
-                message: "Admin OAuth authentication required. Please setup admin credentials first.",
-            });
-        }
-        // Subir archivos a Google Drive usando credenciales del administrador
-        console.log('🔧 Uploading files to Google Drive with admin credentials...');
-        const provider = new GoogleDriveProvider_1.GoogleDriveProvider();
+        // Subir archivos a Cloud Storage y guardar referencias en Firestore
+        console.log('🔧 Uploading files to Cloud Storage...');
         try {
             const uploadedFiles = [];
-            const fileIds = [];
+            const filePaths = [];
+            const db = getFirestore();
             for (const file of files) {
                 // Decodificar contenido Base64
                 const contentBuffer = Buffer.from(file.content, 'base64');
-                // Subir archivo a la carpeta del formulario usando credenciales del administrador
-                const uploadedFile = await provider.uploadFileWithTokens({
-                    folderId: folderId,
+                // Generar ruta única para el archivo en Cloud Storage
+                const filePath = `submissions/${submissionId}/attachments/${Date.now()}_${file.filename}`;
+                // Subir archivo a Cloud Storage
+                const storageUrl = await (0, storage_1.uploadToStorage)('falconcore-onboardingaudit-uploads', filePath, contentBuffer, file.mimeType);
+                uploadedFiles.push({
                     filename: file.filename,
-                    contentBuffer: contentBuffer,
-                    mimeType: file.mimeType,
-                    accessToken: accessToken, // Usar el token refrescado
-                    refreshToken: credentials.refreshToken
+                    filePath: filePath,
+                    storageUrl: storageUrl,
+                    size: file.size,
+                    mimeType: file.mimeType
                 });
-                uploadedFiles.push(uploadedFile);
-                fileIds.push(uploadedFile.id);
-                console.log('✅ File uploaded with admin credentials:', {
+                filePaths.push(filePath);
+                console.log('✅ File uploaded to Cloud Storage:', {
                     filename: file.filename,
-                    fileId: uploadedFile.id,
-                    size: uploadedFile.size,
-                    webViewLink: uploadedFile.webViewLink
+                    filePath: filePath,
+                    storageUrl: storageUrl,
+                    size: file.size
                 });
             }
-            console.log('✅ Files uploaded successfully:', {
+            // Actualizar Firestore con las referencias de los archivos
+            const docRef = db.collection('onboardingaudit_submissions').doc(submissionId);
+            await docRef.update({
+                hasAttachments: true,
+                attachments: uploadedFiles,
+                updatedAt: new Date()
+            });
+            console.log('✅ Files uploaded successfully and Firestore updated:', {
                 submissionId,
                 filesCount: uploadedFiles.length,
                 totalSize,
-                fileIds
+                filePaths
             });
             // Respuesta exitosa
             const response = {
                 success: true,
-                fileIds,
+                fileIds: filePaths, // Usar filePaths como IDs
                 totalSize,
-                message: `Successfully uploaded ${files.length} file(s) to Google Drive`,
+                message: `Successfully uploaded ${files.length} file(s) to Cloud Storage`,
             };
             return res.status(200).json(response);
         }

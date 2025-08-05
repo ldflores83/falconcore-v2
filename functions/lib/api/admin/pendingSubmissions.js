@@ -1,5 +1,5 @@
 "use strict";
-// functions/src/api/admin/submissions.ts
+// functions/src/api/admin/pendingSubmissions.ts
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
     var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -34,7 +34,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getSubmissions = void 0;
+exports.getPendingSubmissions = void 0;
 const getOAuthCredentials_1 = require("../../oauth/getOAuthCredentials");
 const admin = __importStar(require("firebase-admin"));
 // Función para obtener Firestore de forma lazy
@@ -46,7 +46,7 @@ const getFirestore = () => {
     }
     return admin.firestore();
 };
-const getSubmissions = async (req, res) => {
+const getPendingSubmissions = async (req, res) => {
     try {
         const { projectId, userId } = req.body;
         if (!projectId || !userId) {
@@ -70,15 +70,25 @@ const getSubmissions = async (req, res) => {
                 message: "Not authenticated. Please login first."
             });
         }
-        // Obtener submissions desde Firestore (fuente de verdad para el dashboard)
+        // Obtener submissions pendientes desde Firestore
         const db = getFirestore();
-        console.log('📁 Loading submissions from Firestore...');
-        // Obtener todas las submissions de Firestore
+        console.log('📋 Loading pending submissions from Firestore...');
         const snapshot = await db.collection('onboardingaudit_submissions')
+            .where('status', '==', 'pending')
             .orderBy('createdAt', 'desc')
             .get();
-        const submissions = snapshot.docs.map(doc => {
+        console.log('📋 Pending submissions found:', {
+            totalPending: snapshot.docs.length,
+            submissionIds: snapshot.docs.map(doc => doc.id)
+        });
+        const pendingSubmissions = snapshot.docs.map(doc => {
             const data = doc.data();
+            console.log('📋 Processing pending submission:', {
+                id: doc.id,
+                email: data.email,
+                productName: data.productName,
+                status: data.status
+            });
             return {
                 id: doc.id,
                 email: data.email || 'Unknown',
@@ -88,39 +98,28 @@ const getSubmissions = async (req, res) => {
                 mainGoal: data.mainGoal || 'Unknown',
                 createdAt: data.createdAt?.toDate?.() || new Date(data.createdAt) || new Date(),
                 status: data.status || 'pending',
-                folderId: data.driveFolderId || null
+                documentPath: data.documentPath || null,
+                documentUrl: data.documentUrl || null
             };
         });
-        console.log('📁 Submissions loaded from Firestore:', {
+        console.log('✅ Pending submissions loaded:', {
             projectId,
             userId,
-            submissionsCount: submissions.length,
-            submissions: submissions.map(s => ({ id: s.id, email: s.email, status: s.status }))
-        });
-        // También obtener submissions pendientes desde Firestore para el contador
-        const pendingSnapshot = await db.collection('onboardingaudit_submissions')
-            .where('status', '==', 'pending')
-            .get();
-        const pendingCount = pendingSnapshot.docs.length;
-        console.log('✅ Admin submissions loaded with pending count:', {
-            projectId,
-            userId,
-            submissionsCount: submissions.length,
-            pendingCount
+            pendingCount: pendingSubmissions.length
         });
         return res.status(200).json({
             success: true,
-            submissions,
-            pendingCount
+            pendingSubmissions,
+            pendingCount: pendingSubmissions.length
         });
     }
     catch (error) {
-        console.error('❌ Error loading admin submissions:', error);
+        console.error('❌ Error loading pending submissions:', error);
         return res.status(500).json({
             success: false,
-            message: "Failed to load submissions",
+            message: "Failed to load pending submissions",
             error: error instanceof Error ? error.message : 'Unknown error'
         });
     }
 };
-exports.getSubmissions = getSubmissions;
+exports.getPendingSubmissions = getPendingSubmissions;

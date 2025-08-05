@@ -26,9 +26,11 @@ export const check = async (req: Request, res: Response) => {
     const credentials = await getOAuthCredentials(userId);
     
     if (!credentials) {
+      console.log('❌ No OAuth credentials found for:', userId);
       return res.status(401).json({
         success: false,
-        message: "Not authenticated. Please login first."
+        message: "Not authenticated. Please login first.",
+        requiresLogin: true
       });
     }
 
@@ -36,9 +38,11 @@ export const check = async (req: Request, res: Response) => {
     const validToken = await getValidAccessToken(userId);
     
     if (!validToken) {
+      console.log('❌ Invalid or expired token for:', userId);
       return res.status(401).json({
         success: false,
-        message: "Invalid or expired token. Please login again."
+        message: "Invalid or expired token. Please login again.",
+        requiresLogin: true
       });
     }
 

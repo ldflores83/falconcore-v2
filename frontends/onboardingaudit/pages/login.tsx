@@ -18,7 +18,7 @@ export default function AdminLogin() {
       const oauthUrl = `https://uaylabs.web.app/onboardingaudit/api/oauth/login?project_id=onboardingaudit&t=${timestamp}`;
       window.location.href = oauthUrl;
     } catch (error) {
-      setError('Error iniciando autenticación. Por favor intenta de nuevo.');
+      setError('Error starting authentication. Please try again.');
       setIsLoading(false);
     }
   };

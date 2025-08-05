@@ -113,6 +113,21 @@ exports.onboardingauditApi = (0, https_1.onRequest)({
                 const { trackVisit } = await Promise.resolve().then(() => __importStar(require('./api/public/trackVisit')));
                 await trackVisit(req, res);
                 return;
+            case 'public/receiveForm':
+                console.log('✅ Matched /public/receiveForm case');
+                const { receiveForm } = await Promise.resolve().then(() => __importStar(require('./api/public/receiveForm')));
+                await receiveForm(req, res);
+                return;
+            case 'public/uploadAsset':
+                console.log('✅ Matched /public/uploadAsset case');
+                const { uploadAsset } = await Promise.resolve().then(() => __importStar(require('./api/public/uploadAsset')));
+                await uploadAsset(req, res);
+                return;
+            case 'public/checkSubmissionStatus':
+                console.log('✅ Matched /public/checkSubmissionStatus case');
+                const { checkSubmissionStatus } = await Promise.resolve().then(() => __importStar(require('./api/public/checkSubmissionStatus')));
+                await checkSubmissionStatus(req, res);
+                return;
             default:
                 res.status(404).json({
                     success: false,

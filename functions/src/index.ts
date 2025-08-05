@@ -93,6 +93,24 @@ export const onboardingauditApi = onRequest(
           await trackVisit(req, res);
           return;
         
+        case 'public/receiveForm':
+          console.log('✅ Matched /public/receiveForm case');
+          const { receiveForm } = await import('./api/public/receiveForm');
+          await receiveForm(req, res);
+          return;
+        
+        case 'public/uploadAsset':
+          console.log('✅ Matched /public/uploadAsset case');
+          const { uploadAsset } = await import('./api/public/uploadAsset');
+          await uploadAsset(req, res);
+          return;
+        
+        case 'public/checkSubmissionStatus':
+          console.log('✅ Matched /public/checkSubmissionStatus case');
+          const { checkSubmissionStatus } = await import('./api/public/checkSubmissionStatus');
+          await checkSubmissionStatus(req, res);
+          return;
+        
         default:
           res.status(404).json({
             success: false,

@@ -1,8 +1,18 @@
 // /functions/src/api/public/uploadAsset.ts
 
 import { Request, Response } from "express";
-import { GoogleDriveProvider } from "../../storage/providers/GoogleDriveProvider";
-import { getOAuthCredentials, getValidAccessToken } from "../../oauth/getOAuthCredentials";
+import { uploadToStorage } from "../../services/storage";
+import * as admin from 'firebase-admin';
+
+// Función para obtener Firestore de forma lazy
+const getFirestore = () => {
+  if (!admin.apps.length) {
+    admin.initializeApp({
+      projectId: 'falconcore-v2',
+    });
+  }
+  return admin.firestore();
+};
 
 interface UploadAssetRequest {
   submissionId: string;
@@ -53,10 +63,10 @@ export const uploadAsset = async (req: Request, res: Response) => {
       });
     }
 
-    // Validar límite de tamaño total (10MB) y archivos individuales (5MB)
+    // Validar límite de tamaño total (10MB) y archivos individuales (10MB)
     const totalSize = files.reduce((sum, file) => sum + file.size, 0);
     const maxTotalSize = 10 * 1024 * 1024; // 10MB total
-    const maxIndividualSize = 5 * 1024 * 1024; // 5MB por archivo
+    const maxIndividualSize = 10 * 1024 * 1024; // 10MB por archivo
 
     // Validar archivos individuales
     const oversizedFiles = files.filter(file => file.size > maxIndividualSize);
@@ -64,7 +74,7 @@ export const uploadAsset = async (req: Request, res: Response) => {
       const fileNames = oversizedFiles.map(f => f.filename).join(', ');
       return res.status(400).json({
         success: false,
-        message: `File(s) exceed 5MB limit: ${fileNames}. Please compress or split large files.`
+        message: `File(s) exceed 10MB limit: ${fileNames}. Please compress or split large files.`
       });
     }
 
@@ -86,77 +96,68 @@ export const uploadAsset = async (req: Request, res: Response) => {
       timestamp: new Date().toISOString(),
     });
 
-    // Usar credenciales del administrador para subir archivos
-    const adminEmail = 'luisdaniel883@gmail.com';
-    const adminUserId = `${adminEmail}_${projectId || 'onboardingaudit'}`;
-    
-    // Obtener access token válido (con refresh automático si es necesario)
-    const accessToken = await getValidAccessToken(adminUserId);
-    
-    if (!accessToken) {
-      console.log('⚠️ No valid OAuth credentials found for admin:', adminUserId);
-      return res.status(401).json({
-        success: false,
-        message: "Admin OAuth authentication required. Please setup admin credentials first.",
-      });
-    }
-    
-    // Obtener credenciales completas para el refresh token
-    const credentials = await getOAuthCredentials(adminUserId);
-    if (!credentials) {
-      console.log('⚠️ No OAuth credentials found for admin:', adminUserId);
-      return res.status(401).json({
-        success: false,
-        message: "Admin OAuth authentication required. Please setup admin credentials first.",
-      });
-    }
-
-    // Subir archivos a Google Drive usando credenciales del administrador
-    console.log('🔧 Uploading files to Google Drive with admin credentials...');
-    const provider = new GoogleDriveProvider();
+    // Subir archivos a Cloud Storage y guardar referencias en Firestore
+    console.log('🔧 Uploading files to Cloud Storage...');
     
     try {
       const uploadedFiles = [];
-      const fileIds = [];
+      const filePaths = [];
+      const db = getFirestore();
 
       for (const file of files) {
         // Decodificar contenido Base64
         const contentBuffer = Buffer.from(file.content, 'base64');
         
-        // Subir archivo a la carpeta del formulario usando credenciales del administrador
-        const uploadedFile = await provider.uploadFileWithTokens({
-          folderId: folderId,
+        // Generar ruta única para el archivo en Cloud Storage
+        const filePath = `submissions/${submissionId}/attachments/${Date.now()}_${file.filename}`;
+        
+        // Subir archivo a Cloud Storage
+        const storageUrl = await uploadToStorage(
+          'falconcore-onboardingaudit-uploads',
+          filePath,
+          contentBuffer,
+          file.mimeType
+        );
+
+        uploadedFiles.push({
           filename: file.filename,
-          contentBuffer: contentBuffer,
-          mimeType: file.mimeType,
-          accessToken: accessToken, // Usar el token refrescado
-          refreshToken: credentials.refreshToken
+          filePath: filePath,
+          storageUrl: storageUrl,
+          size: file.size,
+          mimeType: file.mimeType
         });
+        
+        filePaths.push(filePath);
 
-        uploadedFiles.push(uploadedFile);
-        fileIds.push(uploadedFile.id);
-
-        console.log('✅ File uploaded with admin credentials:', {
+        console.log('✅ File uploaded to Cloud Storage:', {
           filename: file.filename,
-          fileId: uploadedFile.id,
-          size: uploadedFile.size,
-          webViewLink: uploadedFile.webViewLink
+          filePath: filePath,
+          storageUrl: storageUrl,
+          size: file.size
         });
       }
 
-      console.log('✅ Files uploaded successfully:', {
+      // Actualizar Firestore con las referencias de los archivos
+      const docRef = db.collection('onboardingaudit_submissions').doc(submissionId);
+      await docRef.update({
+        hasAttachments: true,
+        attachments: uploadedFiles,
+        updatedAt: new Date()
+      });
+
+      console.log('✅ Files uploaded successfully and Firestore updated:', {
         submissionId,
         filesCount: uploadedFiles.length,
         totalSize,
-        fileIds
+        filePaths
       });
 
       // Respuesta exitosa
       const response: UploadAssetResponse = {
         success: true,
-        fileIds,
+        fileIds: filePaths, // Usar filePaths como IDs
         totalSize,
-        message: `Successfully uploaded ${files.length} file(s) to Google Drive`,
+        message: `Successfully uploaded ${files.length} file(s) to Cloud Storage`,
       };
 
       return res.status(200).json(response);

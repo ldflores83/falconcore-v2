@@ -100,15 +100,21 @@ app.use(async (req, res, next) => {
         }
       }
       
-      // Interceptar rutas OAuth para cualquier producto (GET)
-      if (req.method === 'GET' && apiPath.startsWith('oauth/')) {
-        if (apiPath === 'oauth/login') {
-          console.log('🔄 Intercepting and redirecting to OAuth login handler');
-          // Importar y llamar al handler de login OAuth
-          const { login } = await import('./oauth/login');
-          return login(req, res);
-        }
-      }
+                 // Interceptar rutas OAuth para cualquier producto (GET)
+       if (req.method === 'GET' && apiPath.startsWith('oauth/')) {
+         if (apiPath.startsWith('oauth/login')) {
+           console.log('🔄 Intercepting and redirecting to OAuth login handler');
+           // Importar y llamar al handler de login OAuth
+           const { login } = await import('./oauth/login');
+           return login(req, res);
+         }
+         if (apiPath.startsWith('oauth/callback')) {
+           console.log('🔄 Intercepting and redirecting to OAuth callback handler');
+           // Importar y llamar al handler de callback OAuth
+           const { callback } = await import('./oauth/callback');
+           return callback(req, res);
+         }
+       }
       
                     // Interceptar rutas Auth para cualquier producto (POST)
         if (req.method === 'POST' && apiPath.startsWith('auth/')) {
@@ -126,15 +132,45 @@ app.use(async (req, res, next) => {
           }
         }
        
-       // Interceptar rutas Admin para cualquier producto (POST)
-       if (req.method === 'POST' && apiPath.startsWith('admin/')) {
-         if (apiPath === 'admin/submissions') {
-           console.log('🔄 Intercepting and redirecting to admin submissions handler');
-           // Importar y llamar al handler de admin submissions
-           const { getSubmissions } = await import('./api/admin/submissions');
-           return getSubmissions(req, res);
-         }
-       }
+               // Interceptar rutas Admin para cualquier producto (POST)
+        if (req.method === 'POST' && apiPath.startsWith('admin/')) {
+          if (apiPath === 'admin/submissions') {
+            console.log('🔄 Intercepting and redirecting to admin submissions handler');
+            // Importar y llamar al handler de admin submissions
+            const { getSubmissions } = await import('./api/admin/submissions');
+            return getSubmissions(req, res);
+          }
+          if (apiPath === 'admin/analytics') {
+            console.log('🔄 Intercepting and redirecting to admin analytics handler');
+            // Importar y llamar al handler de admin analytics
+            const { getAnalytics } = await import('./api/admin/analytics');
+            return getAnalytics(req, res);
+          }
+                     if (apiPath === 'admin/updateStatus') {
+             console.log('🔄 Intercepting and redirecting to admin updateStatus handler');
+             // Importar y llamar al handler de admin updateStatus
+             const { updateSubmissionStatus } = await import('./api/admin/updateStatus');
+             return updateSubmissionStatus(req, res);
+           }
+           if (apiPath === 'admin/processSubmissions') {
+             console.log('🔄 Intercepting and redirecting to admin processSubmissions handler');
+             // Importar y llamar al handler de admin processSubmissions
+             const { processSubmissions } = await import('./api/admin/processSubmissions');
+             return processSubmissions(req, res);
+           }
+           if (apiPath === 'admin/updateSubmissionStatus') {
+             console.log('🔄 Intercepting and redirecting to admin updateSubmissionStatus handler');
+             // Importar y llamar al handler de admin updateSubmissionStatus
+             const { updateSubmissionStatus } = await import('./api/admin/updateSubmissionStatus');
+             return updateSubmissionStatus(req, res);
+           }
+           if (apiPath === 'admin/pendingSubmissions') {
+             console.log('🔄 Intercepting and redirecting to admin pendingSubmissions handler');
+             // Importar y llamar al handler de admin pendingSubmissions
+             const { getPendingSubmissions } = await import('./api/admin/pendingSubmissions');
+             return getPendingSubmissions(req, res);
+           }
+        }
     }
   }
   next();
@@ -145,6 +181,13 @@ app.post('/public/receiveForm', receiveForm);
 app.post('/public/uploadAsset', uploadAsset);
 app.post('/public/getUsageStatus', getUsageStatus);
 app.post('/public/generateDocument', generateDocument);
+
+// Rutas directas para admin
+app.post('/admin/pendingSubmissions', async (req, res) => {
+  console.log('🔄 Direct route: admin/pendingSubmissions called');
+  const { getPendingSubmissions } = await import('./api/admin/pendingSubmissions');
+  return getPendingSubmissions(req, res);
+});
 
 // Ruta para manejar peticiones que llegan con path: '/' (a través del rewrite)
 app.all('/', async (req, res) => {
@@ -181,10 +224,32 @@ app.all('/', async (req, res) => {
     }
     
     // Interceptar rutas OAuth para cualquier producto
-    if (apiPath === 'oauth/login') {
+    if (apiPath.startsWith('oauth/login')) {
       console.log('🔄 Root path: redirecting to OAuth login handler');
       const { login } = await import('./oauth/login');
       return login(req, res);
+    }
+    if (apiPath.startsWith('oauth/callback')) {
+      console.log('🔄 Root path: redirecting to OAuth callback handler');
+      const { callback } = await import('./oauth/callback');
+      return callback(req, res);
+    }
+    
+    // Interceptar rutas Admin para cualquier producto
+    if (apiPath === 'admin/submissions') {
+      console.log('🔄 Root path: redirecting to admin submissions handler');
+      const { getSubmissions } = await import('./api/admin/submissions');
+      return getSubmissions(req, res);
+    }
+    if (apiPath === 'admin/pendingSubmissions') {
+      console.log('🔄 Root path: redirecting to admin pendingSubmissions handler');
+      const { getPendingSubmissions } = await import('./api/admin/pendingSubmissions');
+      return getPendingSubmissions(req, res);
+    }
+    if (apiPath === 'admin/processSubmissions') {
+      console.log('🔄 Root path: redirecting to admin processSubmissions handler');
+      const { processSubmissions } = await import('./api/admin/processSubmissions');
+      return processSubmissions(req, res);
     }
   }
   

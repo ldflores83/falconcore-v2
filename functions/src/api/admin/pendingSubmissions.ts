@@ -1,8 +1,7 @@
-// functions/src/api/admin/submissions.ts
+// functions/src/api/admin/pendingSubmissions.ts
 
 import { Request, Response } from "express";
 import { getOAuthCredentials } from '../../oauth/getOAuthCredentials';
-import { GoogleDriveProvider } from '../../storage/providers/GoogleDriveProvider';
 import * as admin from 'firebase-admin';
 
 // Función para obtener Firestore de forma lazy
@@ -15,7 +14,7 @@ const getFirestore = () => {
   return admin.firestore();
 };
 
-export const getSubmissions = async (req: Request, res: Response) => {
+export const getPendingSubmissions = async (req: Request, res: Response) => {
   try {
     const { projectId, userId } = req.body;
 
@@ -44,18 +43,30 @@ export const getSubmissions = async (req: Request, res: Response) => {
       });
     }
 
-    // Obtener submissions desde Firestore (fuente de verdad para el dashboard)
+    // Obtener submissions pendientes desde Firestore
     const db = getFirestore();
     
-    console.log('📁 Loading submissions from Firestore...');
+    console.log('📋 Loading pending submissions from Firestore...');
     
-    // Obtener todas las submissions de Firestore
     const snapshot = await db.collection('onboardingaudit_submissions')
+      .where('status', '==', 'pending')
       .orderBy('createdAt', 'desc')
       .get();
     
-    const submissions = snapshot.docs.map(doc => {
+    console.log('📋 Pending submissions found:', {
+      totalPending: snapshot.docs.length,
+      submissionIds: snapshot.docs.map(doc => doc.id)
+    });
+    
+    const pendingSubmissions = snapshot.docs.map(doc => {
       const data = doc.data();
+      console.log('📋 Processing pending submission:', {
+        id: doc.id,
+        email: data.email,
+        productName: data.productName,
+        status: data.status
+      });
+      
       return {
         id: doc.id,
         email: data.email || 'Unknown',
@@ -65,43 +76,29 @@ export const getSubmissions = async (req: Request, res: Response) => {
         mainGoal: data.mainGoal || 'Unknown',
         createdAt: data.createdAt?.toDate?.() || new Date(data.createdAt) || new Date(),
         status: data.status || 'pending',
-        folderId: data.driveFolderId || null
+        documentPath: data.documentPath || null,
+        documentUrl: data.documentUrl || null
       };
     });
-    
-    console.log('📁 Submissions loaded from Firestore:', {
+
+    console.log('✅ Pending submissions loaded:', {
       projectId,
       userId,
-      submissionsCount: submissions.length,
-      submissions: submissions.map(s => ({ id: s.id, email: s.email, status: s.status }))
+      pendingCount: pendingSubmissions.length
     });
-    
-    // También obtener submissions pendientes desde Firestore para el contador
-    const pendingSnapshot = await db.collection('onboardingaudit_submissions')
-      .where('status', '==', 'pending')
-      .get();
-    
-    const pendingCount = pendingSnapshot.docs.length;
-    
-    console.log('✅ Admin submissions loaded with pending count:', {
-      projectId,
-      userId,
-      submissionsCount: submissions.length,
-      pendingCount
-    });
-    
+
     return res.status(200).json({
       success: true,
-      submissions,
-      pendingCount
+      pendingSubmissions,
+      pendingCount: pendingSubmissions.length
     });
 
   } catch (error) {
-    console.error('❌ Error loading admin submissions:', error);
+    console.error('❌ Error loading pending submissions:', error);
     
     return res.status(500).json({
       success: false,
-      message: "Failed to load submissions",
+      message: "Failed to load pending submissions",
       error: error instanceof Error ? error.message : 'Unknown error'
     });
   }

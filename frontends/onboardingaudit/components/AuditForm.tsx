@@ -32,6 +32,23 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
   const [currentStep, setCurrentStep] = useState(1);
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [totalFileSize, setTotalFileSize] = useState(0);
+  const [uploadProgress, setUploadProgress] = useState<{
+    isUploading: boolean;
+    currentFile: string;
+    currentIndex: number;
+    totalFiles: number;
+    successfulUploads: number;
+    failedUploads: number;
+    errors: string[];
+  }>({
+    isUploading: false,
+    currentFile: '',
+    currentIndex: 0,
+    totalFiles: 0,
+    successfulUploads: 0,
+    failedUploads: 0,
+    errors: []
+  });
 
   const handleInputChange = (field: keyof OnboardingAuditForm, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -62,7 +79,7 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
     setIsSubmitting(true);
 
     // Validar archivos antes de enviar
-    const maxIndividualSize = 5 * 1024 * 1024; // 5MB por archivo
+    const maxIndividualSize = 10 * 1024 * 1024; // 10MB por archivo
     const maxTotalSize = 10 * 1024 * 1024; // 10MB total
     
     if (uploadedFiles.length > 0) {
@@ -71,7 +88,7 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
       if (oversizedFiles.length > 0) {
         const fileNames = oversizedFiles.map(f => f.name).join(', ');
         setIsSubmitting(false);
-        onSubmit(false, `File(s) exceed 5MB limit: ${fileNames}. Please compress or split large files.`);
+        onSubmit(false, `File(s) exceed 10MB limit: ${fileNames}. Please compress or split large files.`);
         return;
       }
       
@@ -105,18 +122,58 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
             filesCount: uploadedFiles.length
           });
           
+          // Inicializar progreso de upload
+          setUploadProgress({
+            isUploading: true,
+            currentFile: '',
+            currentIndex: 0,
+            totalFiles: uploadedFiles.length,
+            successfulUploads: 0,
+            failedUploads: 0,
+            errors: []
+          });
+          
           const uploadResults = [];
-          for (const file of uploadedFiles) {
+          for (let i = 0; i < uploadedFiles.length; i++) {
+            const file = uploadedFiles[i];
+            
+            // Actualizar progreso actual
+            setUploadProgress(prev => ({
+              ...prev,
+              currentFile: file.name,
+              currentIndex: i + 1
+            }));
+            
             try {
               console.log(`🔍 Uploading file: ${file.name} (${Math.round(file.size / 1024)}KB)`);
               const uploadResult = await OnboardingAuditAPI.uploadAsset(file, response.submissionId!, response.folderId!, formData.email);
               uploadResults.push({ file: file.name, success: true, result: uploadResult });
               console.log(`✅ File uploaded successfully: ${file.name}`);
+              
+              // Actualizar contador de éxitos
+              setUploadProgress(prev => ({
+                ...prev,
+                successfulUploads: prev.successfulUploads + 1
+              }));
             } catch (error) {
               console.error(`❌ Error uploading file ${file.name}:`, error);
+              const errorMessage = error instanceof Error ? error.message : 'Unknown error';
               uploadResults.push({ file: file.name, success: false, error: error });
+              
+              // Actualizar contador de errores
+              setUploadProgress(prev => ({
+                ...prev,
+                failedUploads: prev.failedUploads + 1,
+                errors: [...prev.errors, `${file.name}: ${errorMessage}`]
+              }));
             }
           }
+          
+          // Finalizar progreso
+          setUploadProgress(prev => ({
+            ...prev,
+            isUploading: false
+          }));
           
           // Log upload summary
           const successfulUploads = uploadResults.filter(r => r.success).length;
@@ -134,25 +191,57 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
           });
         }
         
-        onSubmit(true, 'Your audit request has been submitted successfully! You will receive your report within 48 hours.');
+        // Mostrar mensaje final basado en el resultado de los uploads
+        const finalMessage = uploadProgress.failedUploads > 0 
+          ? `Your audit request has been submitted successfully! However, ${uploadProgress.failedUploads} file(s) failed to upload. You will receive your report within 48 hours.`
+          : 'Your audit request has been submitted successfully! You will receive your report within 48 hours.';
+        
+        onSubmit(true, finalMessage);
       } else {
-        onSubmit(false, response.message);
-      }
-            } catch (error) {
-          console.error('❌ Form submission error:', error);
-          let errorMessage = 'An error occurred. Please try again.';
-          
-          // Extraer mensaje de error específico si está disponible
-          if (error instanceof Error) {
-            errorMessage = error.message;
-          } else if (typeof error === 'string') {
-            errorMessage = error;
-          }
-          
-          onSubmit(false, errorMessage);
-        } finally {
-          setIsSubmitting(false);
+        // Handle specific backend errors
+        let errorMessage = response.message || 'An error occurred. Please try again.';
+        
+        // Handle specific backend error messages
+        if (errorMessage.includes('You already have a pending request')) {
+          errorMessage = 'You already have a pending request. Please wait for it to be completed before submitting another. We want to give space to other users who also want to request analysis.';
+        } else if (errorMessage.includes('We are currently working on pending requests')) {
+          errorMessage = 'We are currently working on pending requests. Please try again later when more slots become available. We want to ensure the quality of each analysis.';
+        } else if (errorMessage.includes('Missing required fields')) {
+          errorMessage = 'Please complete all required fields.';
+        } else if (errorMessage.includes('Service temporarily unavailable')) {
+          errorMessage = 'Service temporarily unavailable. Please try again in a few minutes.';
         }
+        
+        onSubmit(false, errorMessage);
+      }
+    } catch (error) {
+      console.error('❌ Form submission error:', error);
+      let errorMessage = 'An error occurred. Please try again.';
+      
+      // Extract specific error message if available
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      }
+      
+      // Handle specific errors
+      if (errorMessage.includes('NetworkError') || errorMessage.includes('fetch')) {
+        errorMessage = 'Network error. Please check your internet connection and try again.';
+      } else if (errorMessage.includes('timeout')) {
+        errorMessage = 'Request timed out. Please try again.';
+      } else if (errorMessage.includes('413')) {
+        errorMessage = 'File size too large. Please reduce file sizes and try again.';
+      } else if (errorMessage.includes('429')) {
+        errorMessage = 'Too many requests. Please wait a moment and try again.';
+      } else if (errorMessage.includes('500')) {
+        errorMessage = 'Server error. Please try again later.';
+      }
+      
+      onSubmit(false, errorMessage);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const nextStep = () => setCurrentStep(prev => Math.min(prev + 1, 4));
@@ -171,6 +260,53 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
       <div className="text-center text-white mb-6">
         <span className="text-sm">Step {currentStep} of 4</span>
       </div>
+
+      {/* File Upload Progress */}
+      {uploadProgress.isUploading && (
+        <div className="card bg-blue-900/30 border border-blue-500/30">
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="text-white font-medium">Uploading Files...</h4>
+            <span className="text-blue-300 text-sm">
+              {uploadProgress.currentIndex} / {uploadProgress.totalFiles}
+            </span>
+          </div>
+          
+          {/* Progress Bar */}
+          <div className="w-full bg-gray-700 rounded-full h-2 mb-3">
+            <div 
+              className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+              style={{ width: `${(uploadProgress.currentIndex / uploadProgress.totalFiles) * 100}%` }}
+            ></div>
+          </div>
+          
+          {/* Current File */}
+          <div className="text-sm text-blue-200 mb-2">
+            <span className="font-medium">Current:</span> {uploadProgress.currentFile}
+          </div>
+          
+          {/* Status */}
+          <div className="flex justify-between text-xs">
+            <span className="text-green-400">
+              ✅ {uploadProgress.successfulUploads} successful
+            </span>
+            <span className="text-red-400">
+              ❌ {uploadProgress.failedUploads} failed
+            </span>
+          </div>
+          
+          {/* Error Messages */}
+          {uploadProgress.errors.length > 0 && (
+            <div className="mt-3 p-2 bg-red-900/30 border border-red-500/30 rounded">
+              <p className="text-red-200 text-xs font-medium mb-1">Upload Errors:</p>
+              <ul className="text-red-300 text-xs space-y-1">
+                {uploadProgress.errors.map((error, index) => (
+                  <li key={index} className="truncate">• {error}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Step 1: Product Basics */}
       {currentStep === 1 && (
@@ -498,13 +634,18 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
             Next
           </button>
         ) : (
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="btn-primary ml-auto"
-          >
-            {isSubmitting ? 'Submitting...' : 'Submit Audit Request'}
-          </button>
+                     <button
+             type="submit"
+             disabled={isSubmitting || uploadProgress.isUploading}
+             className="btn-primary ml-auto"
+           >
+             {uploadProgress.isUploading 
+               ? `Uploading Files... (${uploadProgress.currentIndex}/${uploadProgress.totalFiles})`
+               : isSubmitting 
+                 ? 'Submitting...' 
+                 : 'Submit Audit Request'
+             }
+           </button>
         )}
       </div>
     </form>

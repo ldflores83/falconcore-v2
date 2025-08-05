@@ -3,14 +3,52 @@ import Head from 'next/head';
 import AuditForm from '../components/AuditForm';
 import SuccessMessage from '../components/SuccessMessage';
 import { initAnalytics } from '../lib/analytics';
+import { OnboardingAuditAPI } from '../lib/api';
 
 export default function OnboardingAudit() {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [canSubmit, setCanSubmit] = useState(true);
+  const [statusMessage, setStatusMessage] = useState('');
+  const [pendingCount, setPendingCount] = useState(0);
 
   // Initialize analytics tracking
   useEffect(() => {
     initAnalytics('onboardingaudit');
+  }, []);
+
+  // Check submission status on component mount
+  useEffect(() => {
+    const checkStatus = async () => {
+      try {
+        console.log('🔍 Checking submission status...');
+        const status = await OnboardingAuditAPI.checkSubmissionStatus();
+        console.log('📊 Submission status response:', status);
+        
+        setCanSubmit(status.canSubmit);
+        setPendingCount(status.pendingCount);
+        
+        if (!status.canSubmit && status.message) {
+          setStatusMessage(status.message);
+        }
+        
+        console.log('✅ Status check completed:', {
+          canSubmit: status.canSubmit,
+          pendingCount: status.pendingCount,
+          message: status.message
+        });
+      } catch (error) {
+        console.error('❌ Error checking submission status:', error);
+        // If we can't check status, allow submission as fallback
+        setCanSubmit(true);
+        console.log('⚠️ Allowing submission as fallback');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    checkStatus();
   }, []);
 
   const handleSubmit = (success: boolean, message: string) => {
@@ -99,8 +137,54 @@ export default function OnboardingAudit() {
         <div className="max-w-2xl mx-auto">
           {!isSubmitted ? (
             <div className="space-y-8">
+              {/* Loading State */}
+              {isLoading && (
+                <div className="card text-center">
+                  <div className="flex items-center justify-center mb-4">
+                    <svg className="animate-spin h-8 w-8 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                  </div>
+                  <p className="text-white">Checking availability...</p>
+                </div>
+              )}
+
+              {/* Waitlist Message */}
+              {!isLoading && !canSubmit && (
+                <div className="card text-center">
+                  <div className="w-16 h-16 bg-yellow-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-xl font-semibold text-white mb-4">Currently at Capacity</h3>
+                  <p className="text-gray-300 mb-6">
+                    We are currently working on {pendingCount} pending requests. 
+                    We want to ensure the quality of each analysis.
+                  </p>
+                  <div className="bg-blue-900/30 border border-blue-500/30 rounded-lg p-4 mb-6">
+                    <p className="text-blue-200 text-sm">
+                      <strong>Join the waitlist!</strong> We'll notify you when new spots become available.
+                    </p>
+                  </div>
+                  <div className="space-y-3">
+                    <button 
+                      onClick={() => window.location.reload()} 
+                      className="btn-secondary"
+                    >
+                      Check Again
+                    </button>
+                    <div className="text-xs text-gray-400">
+                      Spots open up as we complete audits
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Benefits Section */}
-              <div className="grid md:grid-cols-3 gap-6 mb-8">
+              {!isLoading && canSubmit && (
+                <div className="grid md:grid-cols-3 gap-6 mb-8">
                 <div className="card text-center">
                   <div className="w-12 h-12 bg-primary-500 rounded-lg flex items-center justify-center mx-auto mb-4">
                     <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -137,9 +221,12 @@ export default function OnboardingAudit() {
                   </p>
                 </div>
               </div>
+              )}
 
               {/* Form */}
-              <AuditForm onSubmit={handleSubmit} />
+              {!isLoading && canSubmit && (
+                <AuditForm onSubmit={handleSubmit} />
+              )}
             </div>
           ) : (
             <SuccessMessage message={successMessage} onBack={handleBack} />
