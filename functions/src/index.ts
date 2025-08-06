@@ -105,11 +105,7 @@ export const onboardingauditApi = onRequest(
           await uploadAsset(req, res);
           return;
         
-        case 'public/checkSubmissionStatus':
-          console.log('✅ Matched /public/checkSubmissionStatus case');
-          const { checkSubmissionStatus } = await import('./api/public/checkSubmissionStatus');
-          await checkSubmissionStatus(req, res);
-          return;
+
         
         default:
           res.status(404).json({

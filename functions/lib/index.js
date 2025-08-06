@@ -123,11 +123,6 @@ exports.onboardingauditApi = (0, https_1.onRequest)({
                 const { uploadAsset } = await Promise.resolve().then(() => __importStar(require('./api/public/uploadAsset')));
                 await uploadAsset(req, res);
                 return;
-            case 'public/checkSubmissionStatus':
-                console.log('✅ Matched /public/checkSubmissionStatus case');
-                const { checkSubmissionStatus } = await Promise.resolve().then(() => __importStar(require('./api/public/checkSubmissionStatus')));
-                await checkSubmissionStatus(req, res);
-                return;
             default:
                 res.status(404).json({
                     success: false,

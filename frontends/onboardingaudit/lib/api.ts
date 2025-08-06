@@ -40,13 +40,7 @@ export interface DocumentGenerationResponse {
   message: string;
 }
 
-export interface SubmissionStatusResponse {
-  success: boolean;
-  canSubmit: boolean;
-  pendingCount: number;
-  maxPending: number;
-  message?: string;
-}
+
 
 export class OnboardingAuditAPI {
   private static generateClientId(): string {
@@ -128,19 +122,7 @@ export class OnboardingAuditAPI {
     }
   }
 
-  static async checkSubmissionStatus(): Promise<SubmissionStatusResponse> {
-    try {
-      console.log('🔍 API: Calling checkSubmissionStatus...');
-      const response = await api.post('/api/public/checkSubmissionStatus', {
-        projectId: 'onboardingaudit',
-      });
-      console.log('📊 API: Response received:', response.data);
-      return response.data;
-    } catch (error) {
-      console.error('❌ API: Error checking submission status:', error);
-      throw new Error('Failed to check submission status. Please try again.');
-    }
-  }
+
 
   private static fileToBase64(file: File): Promise<string> {
     return new Promise((resolve, reject) => {

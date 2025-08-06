@@ -18,37 +18,10 @@ export default function OnboardingAudit() {
     initAnalytics('onboardingaudit');
   }, []);
 
-  // Check submission status on component mount
+  // Set default state on component mount
   useEffect(() => {
-    const checkStatus = async () => {
-      try {
-        console.log('🔍 Checking submission status...');
-        const status = await OnboardingAuditAPI.checkSubmissionStatus();
-        console.log('📊 Submission status response:', status);
-        
-        setCanSubmit(status.canSubmit);
-        setPendingCount(status.pendingCount);
-        
-        if (!status.canSubmit && status.message) {
-          setStatusMessage(status.message);
-        }
-        
-        console.log('✅ Status check completed:', {
-          canSubmit: status.canSubmit,
-          pendingCount: status.pendingCount,
-          message: status.message
-        });
-      } catch (error) {
-        console.error('❌ Error checking submission status:', error);
-        // If we can't check status, allow submission as fallback
-        setCanSubmit(true);
-        console.log('⚠️ Allowing submission as fallback');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    checkStatus();
+    setIsLoading(false);
+    setCanSubmit(true); // Always allow submission
   }, []);
 
   const handleSubmit = (success: boolean, message: string) => {
