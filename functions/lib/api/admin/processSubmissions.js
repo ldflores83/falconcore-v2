@@ -210,19 +210,19 @@ const processSubmissions = async (req, res) => {
                 else {
                     console.log(`📭 No attachments folder found or folder is empty`);
                 }
-                // LIMPIEZA AGRESIVA: Borrar TODOS los archivos que empiecen con submissions/
-                console.log(`🧹 AGGRESSIVE CLEANUP: Deleting ALL files that start with submissions/`);
+                // LIMPIEZA ESPECÍFICA: Borrar solo los archivos de esta submission específica
+                console.log(`🧹 SPECIFIC CLEANUP: Deleting files for submission ${doc.id} only`);
                 try {
-                    // Listar TODOS los archivos que empiecen con submissions/
+                    // Listar solo los archivos de esta submission específica
                     const storage = await (0, storage_1.getStorage)();
                     const bucket = storage.bucket('falconcore-onboardingaudit-uploads');
-                    // Obtener todos los archivos que empiecen con submissions/
+                    // Obtener solo los archivos de esta submission específica
                     const [files] = await bucket.getFiles({
-                        prefix: 'submissions/'
+                        prefix: `submissions/${doc.id}/`
                     });
-                    console.log(`🗑️ Found ${files.length} files to delete in submissions folder:`, files.map(f => f.name));
+                    console.log(`🗑️ Found ${files.length} files to delete for submission ${doc.id}:`, files.map(f => f.name));
                     if (files.length > 0) {
-                        // Borrar todos los archivos encontrados
+                        // Borrar solo los archivos de esta submission
                         for (const file of files) {
                             try {
                                 await file.delete();
@@ -232,14 +232,14 @@ const processSubmissions = async (req, res) => {
                                 console.warn('⚠️ Could not delete file:', deleteError);
                             }
                         }
-                        console.log(`✅ All submissions files completely cleaned up`);
+                        console.log(`✅ Submission ${doc.id} files cleaned up`);
                     }
                     else {
-                        console.log(`📭 Submissions folder is already empty`);
+                        console.log(`📭 No files found for submission ${doc.id}`);
                     }
                 }
                 catch (cleanupError) {
-                    console.warn('⚠️ Could not clean up submissions folder:', cleanupError);
+                    console.warn('⚠️ Could not clean up submission files:', cleanupError);
                 }
                 // Actualizar estado en Firestore a 'synced' (migrado a Drive, listo para trabajar)
                 await doc.ref.update({

@@ -27,9 +27,13 @@ export default function AdminPanel() {
   const hasInitialized = useRef(false);
 
   useEffect(() => {
-    console.log('🔧 Admin page loaded, checking for sessionToken in URL');
+    console.log('🔧 Admin page loaded, checking for sessionToken');
     console.log('🔧 Current URL:', window.location.href);
     console.log('🔧 Search params:', window.location.search);
+    
+    // Primero intentar obtener sessionToken de localStorage
+    const savedSessionToken = localStorage.getItem('onboardingaudit_sessionToken');
+    console.log('🔧 Saved sessionToken from localStorage:', savedSessionToken);
     
     // Extraer sessionToken de la URL si existe
     const urlParams = new URLSearchParams(window.location.search);
@@ -39,12 +43,17 @@ export default function AdminPanel() {
     if (sessionFromUrl) {
       console.log('🔧 Setting sessionToken from URL');
       setSessionToken(sessionFromUrl);
+      // Guardar en localStorage para persistencia
+      localStorage.setItem('onboardingaudit_sessionToken', sessionFromUrl);
       // Limpiar la URL después de extraer el token
       window.history.replaceState({}, document.title, window.location.pathname);
       console.log('🔧 URL cleaned, new URL:', window.location.href);
+    } else if (savedSessionToken) {
+      console.log('🔧 Using saved sessionToken from localStorage');
+      setSessionToken(savedSessionToken);
     } else {
-      console.log('🔧 No sessionToken found in URL');
-      // Si no hay token en URL, ejecutar auth check inmediatamente
+      console.log('🔧 No sessionToken found anywhere');
+      // Si no hay token en URL ni localStorage, ejecutar auth check inmediatamente
       if (!hasInitialized.current) {
         hasInitialized.current = true;
         checkAuthAndLoadData();
@@ -174,11 +183,15 @@ export default function AdminPanel() {
         body: JSON.stringify(logoutBody)
       });
       
-      // Limpiar el sessionToken local
+      // Limpiar el sessionToken local y localStorage
       setSessionToken('');
+      localStorage.removeItem('onboardingaudit_sessionToken');
       router.push('/onboardingaudit/login');
     } catch (error) {
       console.error('Logout error:', error);
+      // Aún limpiar localStorage incluso si el logout falla
+      localStorage.removeItem('onboardingaudit_sessionToken');
+      router.push('/onboardingaudit/login');
     }
   };
 
@@ -401,6 +414,7 @@ export default function AdminPanel() {
                   <button
                     onClick={handleCleanupSessions}
                     className="btn-secondary text-sm px-4 py-2"
+                    title="Remove expired sessions from database to free up space and improve security"
                   >
                     Cleanup Sessions
                   </button>

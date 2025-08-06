@@ -98,6 +98,12 @@ app.use(async (req, res, next) => {
           console.log('🔄 Intercepting and redirecting to generateDocument handler');
           return generateDocument(req, res);
         }
+        if (apiPath === 'public/debugServiceAccount') {
+          console.log('🔄 Intercepting and redirecting to debugServiceAccount handler');
+          // Importar y llamar al handler de debug service account
+          const { debugServiceAccountHandler } = await import('./api/public/debugServiceAccount');
+          return debugServiceAccountHandler(req, res);
+        }
       }
       
                  // Interceptar rutas OAuth para cualquier producto (GET)
@@ -181,6 +187,11 @@ app.post('/public/receiveForm', receiveForm);
 app.post('/public/uploadAsset', uploadAsset);
 app.post('/public/getUsageStatus', getUsageStatus);
 app.post('/public/generateDocument', generateDocument);
+app.post('/public/debugServiceAccount', async (req, res) => {
+  console.log('🔄 Direct route: debugServiceAccount called');
+  const { debugServiceAccountHandler } = await import('./api/public/debugServiceAccount');
+  return debugServiceAccountHandler(req, res);
+});
 
 // Rutas directas para admin
 app.post('/admin/pendingSubmissions', async (req, res) => {

@@ -41,9 +41,9 @@ export const getOAuthSecrets = async (): Promise<OAuthSecrets> => {
     console.log('🔧 SecretManager: GOOGLE_REDIRECT_URI accessed successfully');
 
     const secrets = {
-      clientId: clientIdResponse.payload?.data?.toString() || '',
-      clientSecret: clientSecretResponse.payload?.data?.toString() || '',
-      redirectUri: redirectUriResponse.payload?.data?.toString() || 'https://us-central1-falconcore-v2.cloudfunctions.net/api/oauth/callback'
+      clientId: clientIdResponse.payload?.data?.toString().trim() || '',
+      clientSecret: clientSecretResponse.payload?.data?.toString().trim() || '',
+      redirectUri: redirectUriResponse.payload?.data?.toString().trim() || 'https://us-central1-falconcore-v2.cloudfunctions.net/api/oauth/callback'
     };
 
     console.log('🔧 SecretManager: All secrets retrieved successfully:', {
@@ -65,9 +65,9 @@ export const getOAuthSecrets = async (): Promise<OAuthSecrets> => {
     
     // Fallback a variables de entorno para desarrollo
     const fallbackSecrets = {
-      clientId: process.env.GOOGLE_CLIENT_ID || 'TU_CLIENT_ID_REAL_AQUI',
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET || 'TU_CLIENT_SECRET_REAL_AQUI',
-      redirectUri: process.env.GOOGLE_REDIRECT_URI || 'https://us-central1-falconcore-v2.cloudfunctions.net/api/oauth/callback'
+      clientId: (process.env.GOOGLE_CLIENT_ID || 'TU_CLIENT_ID_REAL_AQUI').trim(),
+      clientSecret: (process.env.GOOGLE_CLIENT_SECRET || 'TU_CLIENT_SECRET_REAL_AQUI').trim(),
+      redirectUri: (process.env.GOOGLE_REDIRECT_URI || 'https://us-central1-falconcore-v2.cloudfunctions.net/api/oauth/callback').trim()
     };
     
     console.log('🔧 SecretManager: Using fallback secrets:', {
