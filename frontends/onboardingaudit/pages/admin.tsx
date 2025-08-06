@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import AnalyticsDashboard from '../components/AnalyticsDashboard';
@@ -21,40 +21,95 @@ export default function AdminPanel() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [userEmail, setUserEmail] = useState('');
+  const [sessionToken, setSessionToken] = useState('');
   const [activeTab, setActiveTab] = useState<'submissions' | 'analytics'>('submissions');
   const router = useRouter();
+  const hasInitialized = useRef(false);
 
   useEffect(() => {
-    checkAuthAndLoadData();
+    console.log('🔧 Admin page loaded, checking for sessionToken in URL');
+    console.log('🔧 Current URL:', window.location.href);
+    console.log('🔧 Search params:', window.location.search);
+    
+    // Extraer sessionToken de la URL si existe
+    const urlParams = new URLSearchParams(window.location.search);
+    const sessionFromUrl = urlParams.get('session');
+    console.log('🔧 Session from URL:', sessionFromUrl);
+    
+    if (sessionFromUrl) {
+      console.log('🔧 Setting sessionToken from URL');
+      setSessionToken(sessionFromUrl);
+      // Limpiar la URL después de extraer el token
+      window.history.replaceState({}, document.title, window.location.pathname);
+      console.log('🔧 URL cleaned, new URL:', window.location.href);
+    } else {
+      console.log('🔧 No sessionToken found in URL');
+      // Si no hay token en URL, ejecutar auth check inmediatamente
+      if (!hasInitialized.current) {
+        hasInitialized.current = true;
+        checkAuthAndLoadData();
+      }
+    }
   }, []);
+
+  // Ejecutar checkAuthAndLoadData cuando sessionToken cambie
+  useEffect(() => {
+    console.log('🔧 sessionToken changed to:', sessionToken);
+    
+    // Solo ejecutar si hay sessionToken y no se ha inicializado aún
+    if (sessionToken && !hasInitialized.current) {
+      console.log('🔧 Executing checkAuthAndLoadData with sessionToken');
+      hasInitialized.current = true;
+      checkAuthAndLoadData();
+    }
+  }, [sessionToken]);
 
   const checkAuthAndLoadData = async () => {
     try {
+      console.log('🔧 checkAuthAndLoadData called with sessionToken:', sessionToken);
+      
       // Verificar autenticación usando URL del dominio principal
+      const authBody: any = {
+        projectId: 'onboardingaudit',
+        userId: 'luisdaniel883@gmail.com_onboardingaudit'
+      };
+      
+      // Agregar sessionToken si existe
+      if (sessionToken) {
+        authBody.sessionToken = sessionToken;
+        console.log('🔧 Including sessionToken in auth request');
+      } else {
+        console.log('🔧 No sessionToken available');
+      }
+      
+      console.log('🔧 Sending auth request with body:', authBody);
+      
       const authResponse = await fetch('https://uaylabs.web.app/onboardingaudit/api/auth/check', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          projectId: 'onboardingaudit',
-          userId: 'luisdaniel883@gmail.com_onboardingaudit'
-        })
+        body: JSON.stringify(authBody)
       });
 
       if (!authResponse.ok) {
         const authError = await authResponse.json();
         console.log('❌ Auth check failed:', authError);
         
-        if (authError.requiresLogin) {
-          // Redirigir al login si requiere autenticación
-          router.push('/onboardingaudit/login');
-          return;
-        } else {
-          setError('Access denied. Only authorized administrators can view this panel.');
-          setIsLoading(false);
-          return;
-        }
+        // TEMPORAL: No redirigir automáticamente para poder debuggear
+        setError(`Authentication failed: ${authError.message || 'Unknown error'}`);
+        setIsLoading(false);
+        return;
+        
+        // if (authError.requiresLogin) {
+        //   // Redirigir al login si requiere autenticación
+        //   router.push('/onboardingaudit/login');
+        //   return;
+        // } else {
+        //   setError('Access denied. Only authorized administrators can view this panel.');
+        //   setIsLoading(false);
+        //   return;
+        // }
       }
 
       const authData = await authResponse.json();
@@ -66,6 +121,11 @@ export default function AdminPanel() {
       }
 
       setUserEmail(authData.email);
+      
+      // Guardar el sessionToken si se devuelve uno nuevo
+      if (authData.sessionToken && !sessionToken) {
+        setSessionToken(authData.sessionToken);
+      }
 
       // Cargar datos de formularios usando URL del dominio principal
       const submissionsResponse = await fetch('https://uaylabs.web.app/onboardingaudit/api/admin/submissions', {
@@ -96,16 +156,26 @@ export default function AdminPanel() {
 
   const handleLogout = async () => {
     try {
+      const logoutBody: any = {
+        projectId: 'onboardingaudit',
+        userId: 'luisdaniel883@gmail.com_onboardingaudit'
+      };
+      
+      // Agregar sessionToken si existe
+      if (sessionToken) {
+        logoutBody.sessionToken = sessionToken;
+      }
+      
       await fetch('https://uaylabs.web.app/onboardingaudit/api/auth/logout', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          projectId: 'onboardingaudit',
-          userId: 'luisdaniel883@gmail.com_onboardingaudit'
-        })
+        body: JSON.stringify(logoutBody)
       });
+      
+      // Limpiar el sessionToken local
+      setSessionToken('');
       router.push('/onboardingaudit/login');
     } catch (error) {
       console.error('Logout error:', error);
@@ -165,6 +235,34 @@ export default function AdminPanel() {
     } catch (error) {
       console.error('Process submissions error:', error);
       setError('Failed to process submissions.');
+    }
+  };
+
+  const handleCleanupSessions = async () => {
+    try {
+      setError('');
+      const response = await fetch('https://uaylabs.web.app/onboardingaudit/api/admin/cleanupSessions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          projectId: 'onboardingaudit',
+          userId: 'luisdaniel883@gmail.com_onboardingaudit'
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('✅ Sessions cleaned up:', result);
+        setError(''); // Limpiar errores previos
+      } else {
+        const errorData = await response.json();
+        setError(`Error cleaning up sessions: ${errorData.message || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Cleanup sessions error:', error);
+      setError('Failed to cleanup sessions.');
     }
   };
 
@@ -299,6 +397,12 @@ export default function AdminPanel() {
                     className="btn-primary text-sm px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Process Pending ({pendingCount})
+                  </button>
+                  <button
+                    onClick={handleCleanupSessions}
+                    className="btn-secondary text-sm px-4 py-2"
+                  >
+                    Cleanup Sessions
                   </button>
                   <button
                     onClick={checkAuthAndLoadData}

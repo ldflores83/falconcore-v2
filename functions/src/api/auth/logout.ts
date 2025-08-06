@@ -15,7 +15,7 @@ const getFirestore = () => {
 
 export const logout = async (req: Request, res: Response) => {
   try {
-    const { projectId, userId } = req.body;
+    const { projectId, userId, sessionToken } = req.body;
 
     if (!projectId || !userId) {
       return res.status(400).json({
@@ -32,13 +32,21 @@ export const logout = async (req: Request, res: Response) => {
       });
     }
 
-    // Eliminar credenciales OAuth de Firestore
     const db = getFirestore();
+
+    // Si se proporciona un sessionToken, eliminarlo
+    if (sessionToken) {
+      await db.collection('admin_sessions').doc(sessionToken).delete();
+      console.log('✅ Session token deleted:', sessionToken);
+    }
+
+    // Eliminar credenciales OAuth de Firestore
     await db.collection('oauth_credentials').doc(userId).delete();
 
     console.log('✅ OAuth logout successful:', {
       userId,
-      projectId
+      projectId,
+      sessionToken: sessionToken || 'none'
     });
 
     return res.status(200).json({

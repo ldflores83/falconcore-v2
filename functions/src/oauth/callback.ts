@@ -6,6 +6,8 @@ import { StorageProviderFactory } from '../storage/utils/providerFactory';
 import { getUserInfoFromToken } from './oauth_projects';
 import { saveOAuthData } from './saveOAuthData';
 import { getOAuthConfig } from '../config';
+import * as admin from 'firebase-admin';
+import * as crypto from 'crypto';
 
 export const callback = async (req: Request, res: Response) => {
   console.log('🔧 OAuth callback started - UPDATED VERSION');
@@ -109,15 +111,32 @@ export const callback = async (req: Request, res: Response) => {
       });
       console.log('🔧 OAuth data saved to Firestore');
       
+      // Crear sesión de administrador
+      console.log('🔧 Creating admin session...');
+      const sessionToken = crypto.randomBytes(32).toString('hex');
+      const sessionData = {
+        userId,
+        projectId,
+        email: authenticatedEmail,
+        createdAt: admin.firestore.Timestamp.now(),
+        expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + (24 * 60 * 60 * 1000)), // 24 horas
+        userAgent: req.headers['user-agent'] || 'unknown',
+        ipAddress: req.ip || req.connection.remoteAddress || 'unknown'
+      };
+      
+      await admin.firestore().collection('admin_sessions').doc(sessionToken).set(sessionData);
+      console.log('🔧 Admin session created:', sessionToken);
+      
       console.log('✅ OAuth callback successful:', {
         authenticatedEmail,
         projectId,
         folderId,
+        sessionToken,
         timestamp: new Date().toISOString()
       });
 
-      // Redirigir al dashboard en lugar de mostrar JSON
-      const dashboardUrl = `https://uaylabs.web.app/onboardingaudit/admin`;
+      // Redirigir al dashboard con el token de sesión
+      const dashboardUrl = `https://uaylabs.web.app/onboardingaudit/admin?session=${sessionToken}`;
       return res.redirect(dashboardUrl);
 
     } catch (error) {

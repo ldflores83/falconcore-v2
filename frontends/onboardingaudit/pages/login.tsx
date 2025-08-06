@@ -23,7 +23,7 @@ export default function AdminLogin() {
     }
   };
 
-  // Verificar si ya está autenticado
+  // Verificar si ya está autenticado (solo con sessionToken válido)
   useEffect(() => {
     const checkAuth = async () => {
       try {
@@ -41,7 +41,8 @@ export default function AdminLogin() {
 
         if (response.ok) {
           const data = await response.json();
-          if (data.success && data.email === 'luisdaniel883@gmail.com') {
+          // Solo redirigir si hay sessionToken válido
+          if (data.success && data.email === 'luisdaniel883@gmail.com' && data.sessionToken) {
             router.push('/onboardingaudit/admin');
           }
         }

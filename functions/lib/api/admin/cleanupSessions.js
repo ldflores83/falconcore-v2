@@ -1,5 +1,5 @@
 "use strict";
-// functions/src/api/auth/logout.ts
+// functions/src/api/admin/cleanupSessions.ts
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
     var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -34,7 +34,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.logout = void 0;
+exports.cleanupSessions = void 0;
 const admin = __importStar(require("firebase-admin"));
 // Función para obtener Firestore de forma lazy
 const getFirestore = () => {
@@ -45,9 +45,9 @@ const getFirestore = () => {
     }
     return admin.firestore();
 };
-const logout = async (req, res) => {
+const cleanupSessions = async (req, res) => {
     try {
-        const { projectId, userId, sessionToken } = req.body;
+        const { projectId, userId } = req.body;
         if (!projectId || !userId) {
             return res.status(400).json({
                 success: false,
@@ -58,34 +58,39 @@ const logout = async (req, res) => {
         if (!userId.includes('luisdaniel883@gmail.com')) {
             return res.status(403).json({
                 success: false,
-                message: "Access denied. Only authorized administrators can logout."
+                message: "Access denied. Only authorized administrators can cleanup sessions."
             });
         }
         const db = getFirestore();
-        // Si se proporciona un sessionToken, eliminarlo
-        if (sessionToken) {
-            await db.collection('admin_sessions').doc(sessionToken).delete();
-            console.log('✅ Session token deleted:', sessionToken);
-        }
-        // Eliminar credenciales OAuth de Firestore
-        await db.collection('oauth_credentials').doc(userId).delete();
-        console.log('✅ OAuth logout successful:', {
-            userId,
+        const now = Date.now();
+        const maxAge = 24 * 60 * 60 * 1000; // 24 horas en milisegundos
+        // Buscar sesiones expiradas
+        const sessionsRef = db.collection('admin_sessions');
+        const expiredSessions = await sessionsRef
+            .where('expiresAt', '<', admin.firestore.Timestamp.fromMillis(now))
+            .get();
+        const deletedCount = expiredSessions.size;
+        // Eliminar sesiones expiradas
+        const deletePromises = expiredSessions.docs.map(doc => doc.ref.delete());
+        await Promise.all(deletePromises);
+        console.log('✅ Cleanup sessions successful:', {
             projectId,
-            sessionToken: sessionToken || 'none'
+            userId,
+            deletedCount
         });
         return res.status(200).json({
             success: true,
-            message: "Logged out successfully"
+            message: "Sessions cleanup completed",
+            deletedCount
         });
     }
     catch (error) {
-        console.error('❌ Error in OAuth logout:', error);
+        console.error('❌ Error in sessions cleanup:', error);
         return res.status(500).json({
             success: false,
-            message: "Logout failed",
+            message: "Sessions cleanup failed",
             error: error instanceof Error ? error.message : 'Unknown error'
         });
     }
 };
-exports.logout = logout;
+exports.cleanupSessions = cleanupSessions;
