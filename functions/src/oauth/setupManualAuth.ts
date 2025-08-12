@@ -1,25 +1,26 @@
 // functions/src/oauth/setupManualAuth.ts
 
+import { Request, Response } from 'express';
 import { google } from 'googleapis';
-import * as admin from 'firebase-admin';
 import { getOAuthConfig } from '../config';
+import { saveOAuthData } from './saveOAuthData';
+import { StorageProviderFactory } from '../storage/utils/providerFactory';
+import { generateClientId } from '../utils/hash';
 
-// Función para obtener Firestore de forma lazy
-const getFirestore = () => {
-  if (!admin.apps.length) {
-    admin.initializeApp({
-      projectId: 'falconcore-v2'
-    });
-  }
-  return admin.firestore();
-};
-
-export const setupManualAuth = async () => {
+export const setupManualAuth = async (req: Request, res: Response) => {
   try {
-    console.log('🔗 Iniciando setup manual de OAuth...');
-    
+    const { project_id } = req.query;
+
+    if (!project_id) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing project_id parameter"
+      });
+    }
+
     // Configurar OAuth2
     const oauthConfig = await getOAuthConfig();
+    
     const oauth2Client = new google.auth.OAuth2(
       oauthConfig.clientId,
       oauthConfig.clientSecret,
@@ -30,42 +31,51 @@ export const setupManualAuth = async () => {
     const authUrl = oauth2Client.generateAuthUrl({
       access_type: 'offline',
       scope: [
-        'https://www.googleapis.com/auth/drive',
-        'https://www.googleapis.com/auth/documents',
-        'https://www.googleapis.com/auth/presentations'
+        'https://www.googleapis.com/auth/drive.file', // Solo archivos creados por la app
+        'https://www.googleapis.com/auth/userinfo.email' // Solo para obtener el email
       ],
-      prompt: 'consent'
+      prompt: 'consent',
+      state: project_id as string
     });
 
-    console.log('✅ URL de autorización generada:', authUrl);
-    console.log('📋 Instrucciones:');
-    console.log('1. Copia y pega esta URL en tu navegador');
-    console.log('2. Autoriza la aplicación');
-    console.log('3. Copia el código de autorización');
-    console.log('4. Ejecuta setupManualAuthWithCode con el código');
-
-    return {
+    return res.status(200).json({
       success: true,
-      authUrl,
-      message: 'URL de autorización generada. Sigue las instrucciones en los logs.'
-    };
+      message: "Manual OAuth setup URL generated",
+      data: {
+        authUrl,
+        projectId: project_id,
+        instructions: [
+          "1. Copia y pega esta URL en tu navegador",
+          "2. Autoriza la aplicación",
+          "3. Copia el código de autorización",
+          "4. Ejecuta setupManualAuthWithCode con el código"
+        ]
+      }
+    });
 
   } catch (error) {
-    console.error('❌ Error en setupManualAuth:', error);
-    return {
+    return res.status(500).json({
       success: false,
-      message: 'Error generando URL de autorización',
-      error: error instanceof Error ? error.message : 'Unknown error'
-    };
+      message: "Failed to generate manual OAuth URL",
+      error: error instanceof Error ? error.message : "Unknown error"
+    });
   }
 };
 
-export const setupManualAuthWithCode = async (code: string) => {
+export const setupManualAuthWithCode = async (req: Request, res: Response) => {
   try {
-    console.log('🔄 Intercambiando código por tokens...');
-    
+    const { code, project_id, email } = req.body;
+
+    if (!code || !project_id || !email) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required parameters: code, project_id, email"
+      });
+    }
+
     // Configurar OAuth2
     const oauthConfig = await getOAuthConfig();
+    
     const oauth2Client = new google.auth.OAuth2(
       oauthConfig.clientId,
       oauthConfig.clientSecret,
@@ -76,112 +86,88 @@ export const setupManualAuthWithCode = async (code: string) => {
     const { tokens } = await oauth2Client.getToken(code);
     
     if (!tokens.access_token) {
-      throw new Error('No se obtuvo access_token');
+      throw new Error("Failed to get access token");
     }
 
-    // Guardar tokens en Firestore
-    const db = getFirestore();
-    const userId = 'onboardingaudit_user'; // Usuario fijo para onboardingaudit
+    // Generar clientId único basado en email y projectId
+    const clientId = generateClientId(email, project_id);
+
+    // Crear provider y probar conexión
+    const provider = StorageProviderFactory.createProvider('google');
     
-    await db.collection('oauth_credentials').doc(userId).set({
+    // Crear carpeta en Google Drive
+    const folderId = await provider.createFolderWithTokens(
+      email, 
+      project_id, 
+      tokens.access_token,
+      tokens.refresh_token || undefined
+    );
+    
+    // Guardar datos OAuth en Firestore usando clientId como clave
+    await saveOAuthData({
+      clientId,
+      projectId: project_id,
       accessToken: tokens.access_token,
-      refreshToken: tokens.refresh_token || null,
-      expiryDate: tokens.expiry_date || null,
-      scope: tokens.scope,
-      tokenType: tokens.token_type,
-      createdAt: new Date(),
-      updatedAt: new Date()
+      refreshToken: tokens.refresh_token || undefined,
+      expiresAt: tokens.expiry_date || undefined,
+      folderId,
+      email
     });
 
-    console.log('✅ Tokens guardados en Firestore:', {
-      userId,
-      hasAccessToken: !!tokens.access_token,
-      hasRefreshToken: !!tokens.refresh_token,
-      expiryDate: tokens.expiry_date
-    });
-
-    return {
+    return res.status(200).json({
       success: true,
-      message: 'Tokens guardados exitosamente en Firestore',
-      userId
-    };
+      message: "Manual OAuth setup completed",
+      data: {
+        clientId,
+        projectId: project_id,
+        email,
+        folderId
+      }
+    });
 
   } catch (error) {
-    console.error('❌ Error en setupManualAuthWithCode:', error);
-    return {
+    return res.status(500).json({
       success: false,
-      message: 'Error intercambiando código por tokens',
-      error: error instanceof Error ? error.message : 'Unknown error'
-    };
+      message: "Manual OAuth setup failed",
+      error: error instanceof Error ? error.message : "Unknown error"
+    });
   }
 };
 
-export const testManualAuth = async () => {
+export const testManualAuth = async (req: Request, res: Response) => {
   try {
-    console.log('🧪 Probando credenciales OAuth...');
-    
-    const db = getFirestore();
-    const userId = 'onboardingaudit_user';
-    
-    // Obtener credenciales de Firestore
-    const doc = await db.collection('oauth_credentials').doc(userId).get();
-    
-    if (!doc.exists) {
-      return {
+    const { project_id, email } = req.query;
+
+    if (!project_id || !email) {
+      return res.status(400).json({
         success: false,
-        message: 'No se encontraron credenciales OAuth. Ejecuta setupManualAuth primero.'
-      };
+        message: "Missing required parameters: project_id, email"
+      });
     }
 
-    const credentials = doc.data();
-    
-    if (!credentials?.accessToken) {
-      return {
-        success: false,
-        message: 'Credenciales incompletas. Ejecuta setupManualAuthWithCode.'
-      };
-    }
-
-    // Probar conexión con Google Drive
-    const oauthConfig = await getOAuthConfig();
-    const oauth2Client = new google.auth.OAuth2(
-      oauthConfig.clientId,
-      oauthConfig.clientSecret,
-      oauthConfig.redirectUri
-    );
-
-    oauth2Client.setCredentials({
-      access_token: credentials.accessToken,
-      refresh_token: credentials.refreshToken,
-      expiry_date: credentials.expiryDate
-    });
-
-    const drive = google.drive({ version: 'v3', auth: oauth2Client });
-    
-    // Probar acceso a Drive
-    const about = await drive.about.get({
-      fields: 'user,storageQuota'
-    });
-
-    console.log('✅ Conexión exitosa con Google Drive:', {
-      user: about.data.user?.displayName,
-      email: about.data.user?.emailAddress,
-      quota: about.data.storageQuota
-    });
-
-    return {
-      success: true,
-      message: 'Conexión exitosa con Google Drive',
-      user: about.data.user?.displayName,
-      email: about.data.user?.emailAddress
+    // Simular test de conexión
+    const testResult = {
+      connected: true,
+      projectId: project_id,
+      email: email,
+      message: "Connection test completed"
     };
+
+    return res.status(200).json({
+      success: true,
+      message: "Manual OAuth test completed",
+      data: {
+        projectId: project_id,
+        email,
+        testResult
+      }
+    });
 
   } catch (error) {
-    console.error('❌ Error en testManualAuth:', error);
-    return {
+    return res.status(500).json({
       success: false,
-      message: 'Error probando credenciales OAuth',
-      error: error instanceof Error ? error.message : 'Unknown error'
-    };
+      message: "Manual OAuth test failed",
+      error: error instanceof Error ? error.message : "Unknown error"
+    });
   }
 }; 

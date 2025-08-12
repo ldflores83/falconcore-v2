@@ -1,267 +1,220 @@
-# 🏗️ Arquitectura Falcon Core V2
+# Falcon Core V2 - Architecture
 
-## 📋 Resumen Ejecutivo
+## Overview
+Falcon Core V2 is a multi-product platform built with Firebase Functions (Node.js 20) and Next.js frontends. The system supports multiple products with shared backend infrastructure.
 
-**Falcon Core V2** es una plataforma de venture building que permite a UayLabs validar múltiples MVPs bajo un dominio unificado. Cada producto tiene su propio frontend pero comparte recursos del backend de forma modular y escalable.
+## Security Model
 
-## 🎯 Objetivos de la Arquitectura
+### OAuth Flow & Credential Management
+- **Admin Authentication**: Only admin users authenticate via OAuth to access Google Drive
+- **Form Submissions**: User forms have NO access to OAuth credentials
+- **Credential Isolation**: Form submissions go directly to Firestore + Cloud Storage
+- **Admin Processing**: Only the admin panel can sync data to Google Drive using stored OAuth credentials
+- **Dynamic Admin System**: Configurable admin per product via `projectAdmins.ts`
 
-1. **Venture Building**: UayLabs es una venture builder que busca probar varios MVPs bajo su dominio
-2. **Frontends Independientes**: Cada producto tiene su propio frontend (onboardingaudit, ignium, jobpulse, etc.)
-3. **Backend Compartido**: Todos los frontends comparten recursos del backend con funciones genéricas
-4. **OAuth Modular**: Sistema OAuth independiente por frontend con registros separados
-5. **Escalabilidad**: Arquitectura preparada para agregar nuevos productos fácilmente
+### Flujo de Seguridad Correcto:
+1. **Usuario envía formulario** → Datos van a Firestore + Cloud Storage (sin OAuth)
+2. **Admin hace login** → OAuth crea carpeta específica: `producto_email@admin.com`
+3. **Admin procesa submissions** → Sincroniza desde Cloud Storage a Google Drive
+4. **Admin cambia estados** → Actualiza Firestore, elimina registros cuando completa
 
-## 🏛️ Estructura del Proyecto
+### OAuth Module Architecture
+- **Early Validation**: `ENCRYPTION_KEY` validated immediately after token exchange
+- **Race Condition Fix**: 100ms delay in frontend to ensure URL parameter availability
+- **Session Management**: Dynamic admin sessions with `clientId` generation
+- **Security**: AES-256-GCM encryption for sensitive OAuth data
+- **Scalability**: Easy addition of new products with dedicated admins
 
+## Products
+
+### OnboardingAudit
+- **Frontend**: Next.js 14.2.30 with TypeScript
+- **Backend**: Firebase Functions with Express.js
+- **Storage**: Firestore + Cloud Storage + Google Drive (admin only)
+- **Authentication**: OAuth 2.0 for admin access only
+
+#### Security Features:
+- ✅ Form submissions isolated from OAuth credentials
+- ✅ Admin-only Google Drive access
+- ✅ Product-specific folder creation: `onboardingaudit_luisdaniel883@gmail.com`
+- ✅ Persistent folder management (no duplicates)
+- ✅ Restricted OAuth scopes: `drive.file` + `userinfo.email`
+
+#### Data Flow:
+1. **Form Submission**: User data → Firestore + Cloud Storage
+2. **Admin Login**: OAuth → Creates/uses existing folder
+3. **Process Submissions**: Cloud Storage → Google Drive → Delete from Cloud Storage
+4. **Status Management**: Firestore updates → Delete on completion
+
+### Other Products
+- **Ignium**: Landing page with waitlist
+- **JobPulse**: Job board application
+- **PulzioHQ**: Business management tool
+- **UayLabs**: Company landing page
+
+## Backend Architecture
+
+### Firebase Functions Structure
 ```
-falcon-core-v2/
-├── frontends/                    # Frontends de productos
-│   ├── uaylabs/                 # Frontend principal (hosting)
-│   │   ├── out/                 # Build de todos los productos
-│   │   │   ├── index.html       # Landing principal
-│   │   │   ├── onboardingaudit/ # Subruta del producto
-│   │   │   ├── ignium/          # Subruta del producto
-│   │   │   ├── jobpulse/        # Subruta del producto
-│   │   │   └── pulziohq/        # Subruta del producto
-│   │   └── pages/
-│   ├── onboardingaudit/         # Componentes específicos
-│   ├── ignium/                  # Componentes específicos
-│   ├── jobpulse/                # Componentes específicos
-│   └── pulziohq/                # Componentes específicos
-├── functions/                   # Backend (Cloud Functions)
-│   └── src/
-│       ├── api/                 # APIs genéricas
-│       │   ├── public/          # APIs públicas (sin auth)
-│       │   ├── auth/            # APIs de autenticación
-│       │   └── admin/           # APIs administrativas
-│       ├── oauth/               # Sistema OAuth modular
-│       └── storage/             # Proveedores de storage
-└── config/                      # Configuración global
-```
-
-## 🌐 URLs y Rutas
-
-### Dominio Principal
-- **Hosting**: `uaylabs.web.app`
-- **Functions**: `api-fu54nvsqfa-uc.a.run.app`
-
-### Productos Actuales
-- **Onboarding Audit**: `uaylabs.web.app/onboardingaudit`
-- **Ignium**: `uaylabs.web.app/ignium`
-- **JobPulse**: `uaylabs.web.app/jobpulse`
-- **PulzioHQ**: `uaylabs.web.app/pulziohq`
-
-## 🔄 Flujo de Datos
-
-### 1. Frontend → Backend
-```
-Frontend (onboardingaudit) 
-  ↓ POST /onboardingaudit/api/public/receiveForm
-Firebase Hosting Rewrite
-  ↓ Rewrite: /onboardingaudit/api/** → function:api
-Cloud Function (api)
-  ↓ Intercepting Middleware
-Handler (receiveForm.ts)
-  ↓ Google Drive (Admin Credentials)
-Storage (Google Drive)
-```
-
-### 2. OAuth por Producto
-```
-Frontend (onboardingaudit)
-  ↓ GET /onboardingaudit/api/oauth/login
-Cloud Function
-  ↓ getOAuthCredentials(userId = 'onboardingaudit_user')
-Firestore (OAuth Data)
-  ↓ Google OAuth
-Google Drive (User-specific)
+functions/
+├── src/
+│   ├── api/
+│   │   ├── admin/          # Admin-only endpoints
+│   │   ├── auth/           # Authentication endpoints
+│   │   └── public/         # Public form endpoints
+│   ├── oauth/              # OAuth flow management
+│   ├── storage/            # Storage providers (Google Drive, etc.)
+│   └── services/           # Shared services
 ```
 
-## 🔧 Configuración Firebase
+### OAuth Module Structure
+```
+functions/src/oauth/
+├── callback.ts              # Main OAuth callback handler
+├── saveOAuthData.ts         # Secure OAuth data persistence
+├── README.md                # Comprehensive module documentation
+└── providers/               # OAuth provider implementations
+    ├── google.ts            # Google OAuth provider
+    └── microsoft.ts         # Microsoft OAuth provider
 
-### firebase.json
-```json
-{
-  "hosting": {
-    "target": "uaylabs",
-    "public": "frontends/uaylabs/out",
-    "rewrites": [
-      {
-        "source": "/onboardingaudit/api/**",
-        "function": "api",
-        "region": "us-central1"
-      }
-    ]
-  }
-}
+functions/src/config/
+└── projectAdmins.ts         # Dynamic admin configuration per product
 ```
 
-### .firebaserc
-```json
-{
-  "targets": {
-    "falconcore-v2": {
-      "hosting": {
-        "uaylabs": ["uaylabs"]
-      }
-    }
-  }
-}
-```
+### Key Endpoints
+- `/api/public/receiveForm` - Form submissions (NO OAuth access)
+- `/api/admin/processSubmissions` - Admin sync to Google Drive
+- `/api/admin/updateSubmissionStatus` - Status management
+- `/oauth/login` - Admin OAuth initiation
+- `/oauth/callback` - OAuth completion
 
-## 📦 Build y Deploy
+### Storage Providers
+- **GoogleDriveProvider**: Handles Google Drive operations
+- **DropboxProvider**: Future implementation
+- **OneDriveProvider**: Future implementation
 
-### Scripts Optimizados por Producto
-Cada producto tiene su propio script que preserva los builds de otros productos:
+## Frontend Architecture
 
-```powershell
-# Desde cada carpeta de producto
-cd frontends/onboardingaudit
-.\build-and-deploy.ps1
+### Next.js Configuration
+- **Framework**: Next.js 14.2.30
+- **Styling**: Tailwind CSS
+- **Language**: TypeScript
+- **Build**: Static export for Firebase Hosting
 
-cd frontends/ignium  
-.\build-and-deploy.ps1
+### Performance Optimizations
+- **Code Splitting**: Lazy loading with React.lazy
+- **Service Workers**: PWA capabilities
+- **Web Workers**: File processing
+- **Caching**: API response caching with debouncing
+- **Analytics**: Client-side tracking with debouncing
 
-cd frontends/jobpulse
-.\build-and-deploy.ps1
+### OAuth Frontend Integration
+- **Race Condition Resolution**: 100ms delay in `useEffect` to ensure URL parameter availability
+- **Session Token Handling**: Dynamic extraction and cleanup from URL query parameters
+- **Authentication Flow**: Comprehensive logging for debugging and monitoring
+- **State Management**: Efficient `clientId` handling with React hooks
 
-cd frontends/pulziohq
-.\build-and-deploy.ps1
-```
+## Deployment
 
-### Script Recomendado (Todos los Productos)
-El script que funciona correctamente es `scripts/quick-build.ps1`:
+### Build Process
+- **Frontend**: `npm run build` → Static export
+- **Backend**: `npm run build` → TypeScript compilation
+- **Deployment**: Firebase CLI for both hosting and functions
 
-```powershell
-# Build y deploy de todos los frontends
-.\scripts\quick-build.ps1
-```
+### Environment Management
+- **Secrets**: Google Cloud Secret Manager
+- **Configuration**: Environment variables per environment
+- **OAuth**: Stored in Firestore with encryption
 
-### Script Completo (Frontend + Backend)
-```powershell
-# Build y deploy completo (frontends + backend)
-.\scripts\build-all-products.ps1
-```
+## Security Best Practices
 
-### Build Manual de Productos
-```bash
-# Build uaylabs (estructura base) - solo si no existe
-cd frontends/uaylabs && npm run build
+### OAuth Implementation
+- **Scopes**: Minimal required permissions (`drive.file`, `userinfo.email`)
+- **Token Storage**: Encrypted in Firestore
+- **Session Management**: Session tokens with expiry
+- **Folder Isolation**: Product-specific folders only
 
-# Build productos individuales
-cd frontends/ignium && npm run build
-cd frontends/jobpulse && npm run build  
-cd frontends/pulziohq && npm run build
-cd frontends/onboardingaudit && npm run build
+### Data Protection
+- **Form Data**: No OAuth access, direct to storage
+- **Admin Access**: OAuth required for Google Drive operations
+- **Credential Isolation**: Clear separation between public and admin endpoints
 
-# Deploy
-firebase deploy --only hosting
-```
+## Recent Optimizations
 
-### Deploy Functions (Backend)
-```bash
-# Deploy backend compartido
-cd functions
-npm run build
-firebase deploy --only functions:api
-```
+### Code Cleanup
+- ✅ Removed unnecessary debug statements
+- ✅ Eliminated unused code
+- ✅ Optimized imports and dependencies
 
-## 🔐 Sistema OAuth Modular
+### Performance Enhancements
+- ✅ Implemented Web Workers for file processing
+- ✅ Added API response caching
+- ✅ Optimized build process
+- ✅ Enhanced error handling
 
-### Estructura de Usuarios
-```
-Firestore Collection: oauth_credentials
-├── onboardingaudit_user     # Usuario para onboardingaudit
-├── ignium_user             # Usuario para ignium
-├── jobpulse_user           # Usuario para jobpulse
-└── pulziohq_user          # Usuario para pulziohq
-```
+### Security Improvements
+- ✅ Restricted OAuth scopes
+- ✅ Isolated form submissions from OAuth
+- ✅ Implemented persistent folder management
+- ✅ Added session-based authentication
 
-### Credenciales por Producto
-- **onboardingaudit**: `luisdaniel883@gmail.com` (admin)
-- **ignium**: Usuario específico del producto
-- **jobpulse**: Usuario específico del producto
-- **pulziohq**: Usuario específico del producto
+### OAuth Flow Resolution
+- ✅ **Race Condition Fix**: Implemented 100ms delay to resolve component mounting vs URL parameter availability
+- ✅ **Dynamic Admin System**: Replaced hardcoded admin checks with configurable `projectAdmins.ts`
+- ✅ **Session Management**: Enhanced admin session creation and validation
+- ✅ **Comprehensive Logging**: Added detailed frontend and backend logging for debugging
+- ✅ **Error Handling**: Improved error responses and user feedback
 
-## 🛠️ APIs Genéricas
+## Development Guidelines
 
-### Public APIs (Sin Auth)
-- `POST /api/public/receiveForm` - Recibir formularios
-- `POST /api/public/uploadAsset` - Subir archivos
-- `POST /api/public/trackVisit` - Tracking de visitas
-- `GET /api/public/getUsageStatus` - Estado de uso
+### Code Standards
+- **TypeScript**: Strict type checking
+- **ESLint**: Code quality enforcement
+- **Prettier**: Consistent formatting
+- **Error Handling**: Comprehensive error management
 
-### Auth APIs
-- `GET /api/oauth/login` - Login OAuth
-- `GET /api/oauth/callback` - Callback OAuth
-- `GET /api/auth/check` - Verificar autenticación
-- `POST /api/auth/logout` - Logout
+### Testing Strategy
+- **Unit Tests**: Component and function testing
+- **Integration Tests**: API endpoint testing
+- **E2E Tests**: Full workflow validation
 
-### Admin APIs
-- `GET /api/admin/submissions` - Listar submissions
-- `GET /api/admin/analytics` - Analytics
+### Monitoring
+- **Analytics**: Client-side tracking
+- **Logging**: Structured logging for debugging
+- **Error Tracking**: Comprehensive error reporting
 
-## 🔄 Middleware de Interceptación
+## OAuth Troubleshooting
 
-### Problema Resuelto
-Firebase Hosting rewrites causan que `req.path` sea `/` en Cloud Functions, pero `req.originalUrl` mantiene la ruta completa.
+### Common Issues & Solutions
 
-### Solución
-```typescript
-// functions/src/app.ts
-app.use((req, res, next) => {
-  if (req.originalUrl && req.originalUrl.includes('/onboardingaudit/api/')) {
-    // Interceptar y redirigir basándose en originalUrl
-    if (req.originalUrl.includes('/onboardingaudit/api/public/receiveForm')) {
-      return receiveForm(req, res);
-    }
-    // ... más handlers
-  }
-});
-```
+#### Race Condition (Redirect to Login)
+- **Symptom**: User redirected to login after OAuth completion
+- **Cause**: Frontend component mounts before URL parameters are available
+- **Solution**: 100ms delay in `useEffect` ensures URL processing completion
+- **Code**: ```typescript
+  useEffect(() => {
+    setTimeout(() => checkAuthAndLoadData(), 100);
+  }, []);
+  ```
 
-## 📊 Estado Actual
+#### Encryption Key Errors
+- **Symptom**: "Missing or invalid ENCRYPTION_KEY" errors
+- **Cause**: Environment variable not configured or invalid format
+- **Solution**: Verify `ENCRYPTION_KEY` in Google Secret Manager (32-byte hex)
 
-### ✅ Funcionando
-- [x] Formulario onboardingaudit se envía correctamente
-- [x] Documentos se crean en Google Drive
-- [x] Sistema OAuth modular
-- [x] Middleware de interceptación
-- [x] Build y deploy automatizado (`quick-build.ps1`)
+#### Permission Denied (Secret Manager)
+- **Symptom**: `PERMISSION_DENIED: Permission 'secretmanager.versions.access' denied`
+- **Cause**: Firebase Functions service account lacks Secret Manager access
+- **Solution**: Grant `roles/secretmanager.secretAccessor` role to service account
 
-### 🔄 En Progreso
-- [ ] Archivos adjuntos en onboardingaudit
-- [ ] Login OAuth para admin panel
-- [ ] Analytics dashboard
+### Debug Steps
+1. **Frontend**: Check browser console for detailed logs
+2. **Backend**: Verify Firebase Functions logs
+3. **Environment**: Confirm `ENCRYPTION_KEY` configuration
+4. **OAuth Flow**: Test complete authentication sequence
+5. **Admin Config**: Verify `projectAdmins.ts` configuration
 
-### 📋 Pendiente
-- [ ] Nuevos productos (ignium, jobpulse, pulziohq)
-- [ ] Templates de documentos
-- [ ] Sistema de notificaciones
-- [ ] Métricas avanzadas
-
-## 🚀 Escalabilidad
-
-### Agregar Nuevo Producto
-1. **Crear frontend**: `frontends/nuevoproducto/`
-2. **Configurar build**: `next.config.js` → `distDir: '../uaylabs/out/nuevoproducto'`
-3. **Agregar rewrite**: `firebase.json` → `/nuevoproducto/api/**`
-4. **Crear usuario OAuth**: `nuevoproducto_user` en Firestore
-5. **Deploy**: `firebase deploy --only hosting`
-
-### Ventajas de la Arquitectura
-- ✅ **Modular**: Cada producto es independiente
-- ✅ **Escalable**: Fácil agregar nuevos productos
-- ✅ **Compartido**: Backend eficiente y reutilizable
-- ✅ **Mantenible**: Código organizado y documentado
-- ✅ **Seguro**: OAuth por producto, credenciales separadas
-
-## 📝 Notas Importantes
-
-1. **Build Path**: Todos los productos se build en `frontends/uaylabs/out/`
-2. **API Naming**: Funciones genéricas que aceptan `projectId` como parámetro
-3. **OAuth Isolation**: Cada producto tiene su propio usuario y credenciales
-4. **Firebase Rewrites**: Manejo especial para rutas con `/api/` duplicado
-5. **Admin Credentials**: `luisdaniel883@gmail.com` es el admin global
-6. **Script Confiable**: `quick-build.ps1` es el script que funciona sin errores 
+### Performance Notes
+- **100ms Delay**: Imperceptible to users, prevents race conditions reliably
+- **Alternative Solutions**: Event-driven URL processing (future enhancement)
+- **Browser Compatibility**: Works across all modern browsers 

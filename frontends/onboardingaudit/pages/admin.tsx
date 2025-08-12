@@ -1,539 +1,427 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
-import AnalyticsDashboard from '../components/AnalyticsDashboard';
+import { Suspense } from 'react';
 
-interface Submission {
-  id: string;
-  email: string;
-  productName: string;
-  productUrl: string;
-  targetUser: string;
-  mainGoal: string;
-  createdAt: string;
-  status: 'pending' | 'synced' | 'in_progress' | 'completed';
-  folderId?: string;
-}
+// Lazy load AnalyticsDashboard
+const AnalyticsDashboard = React.lazy(() => import('../components/AnalyticsDashboard'));
+
+// Loading component for AnalyticsDashboard
+const AnalyticsLoading = () => (
+  <div className="bg-white rounded-lg shadow-md p-6">
+    <div className="animate-pulse">
+      <div className="h-4 bg-gray-200 rounded w-1/4 mb-4"></div>
+      <div className="space-y-3">
+        <div className="h-4 bg-gray-200 rounded"></div>
+        <div className="h-4 bg-gray-200 rounded w-5/6"></div>
+        <div className="h-4 bg-gray-200 rounded w-4/6"></div>
+      </div>
+    </div>
+  </div>
+);
+
+// Memoized StatusBadge component
+const StatusBadge = React.memo(({ status }: { status: string }) => {
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'synced':
+        return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'in_progress':
+        return 'bg-purple-100 text-purple-800 border-purple-200';
+      case 'completed':
+        return 'bg-green-100 text-green-800 border-green-200';
+      case 'error':
+        return 'bg-red-100 text-red-800 border-red-200';
+      default:
+        return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
+  };
+
+  return (
+    <span className={`px-2 py-1 text-xs font-medium rounded-full border ${getStatusColor(status)}`}>
+      {status}
+    </span>
+  );
+});
+
+StatusBadge.displayName = 'StatusBadge';
 
 export default function AdminPanel() {
-  const [submissions, setSubmissions] = useState<Submission[]>([]);
-  const [pendingCount, setPendingCount] = useState(0);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
-  const [userEmail, setUserEmail] = useState('');
-  const [sessionToken, setSessionToken] = useState('');
-  const [activeTab, setActiveTab] = useState<'submissions' | 'analytics'>('submissions');
+  const [submissions, setSubmissions] = useState([]);
+  const [stats, setStats] = useState({
+    total: 0,
+    pending: 0,
+    completed: 0,
+    error: 0
+  });
   const router = useRouter();
-  const hasInitialized = useRef(false);
 
-  useEffect(() => {
-    console.log('🔧 Admin page loaded, checking for sessionToken');
-    console.log('🔧 Current URL:', window.location.href);
-    console.log('🔧 Search params:', window.location.search);
-    
-    // Primero intentar obtener sessionToken de localStorage
-    const savedSessionToken = localStorage.getItem('onboardingaudit_sessionToken');
-    console.log('🔧 Saved sessionToken from localStorage:', savedSessionToken);
-    
-    // Extraer sessionToken de la URL si existe
-    const urlParams = new URLSearchParams(window.location.search);
-    const sessionFromUrl = urlParams.get('session');
-    console.log('🔧 Session from URL:', sessionFromUrl);
-    
-    if (sessionFromUrl) {
-      console.log('🔧 Setting sessionToken from URL');
-      setSessionToken(sessionFromUrl);
-      // Guardar en localStorage para persistencia
-      localStorage.setItem('onboardingaudit_sessionToken', sessionFromUrl);
-      // Limpiar la URL después de extraer el token
-      window.history.replaceState({}, document.title, window.location.pathname);
-      console.log('🔧 URL cleaned, new URL:', window.location.href);
-    } else if (savedSessionToken) {
-      console.log('🔧 Using saved sessionToken from localStorage');
-      setSessionToken(savedSessionToken);
-    } else {
-      console.log('🔧 No sessionToken found anywhere');
-      // Si no hay token en URL ni localStorage, ejecutar auth check inmediatamente
-      if (!hasInitialized.current) {
-        hasInitialized.current = true;
-        checkAuthAndLoadData();
-      }
-    }
+  // Memoized constants
+  const maxFileSize = useMemo(() => 10 * 1024 * 1024, []); // 10MB
+  const maxIndividualSize = useMemo(() => 5 * 1024 * 1024, []); // 5MB
+
+  // Memoized auth body - Generate clientId dynamically
+  const authBody = useMemo(() => {
+    // Generate clientId dynamically based on the authenticated user
+    // This will be updated after successful authentication
+    return {
+      projectId: 'onboardingaudit',
+      clientId: undefined // Will be set dynamically after OAuth
+    };
   }, []);
 
-  // Ejecutar checkAuthAndLoadData cuando sessionToken cambie
-  useEffect(() => {
-    console.log('🔧 sessionToken changed to:', sessionToken);
-    
-    // Solo ejecutar si hay sessionToken y no se ha inicializado aún
-    if (sessionToken && !hasInitialized.current) {
-      console.log('🔧 Executing checkAuthAndLoadData with sessionToken');
-      hasInitialized.current = true;
-      checkAuthAndLoadData();
-    }
-  }, [sessionToken]);
+  // State to store the authenticated user's clientId
+  const [userClientId, setUserClientId] = useState<string | null>(null);
 
-  const checkAuthAndLoadData = async () => {
-    try {
-      console.log('🔧 checkAuthAndLoadData called with sessionToken:', sessionToken);
+  // Memoized stats
+  const memoizedStats = useMemo(() => stats, [stats]);
+
+         const checkAuthAndLoadData = useCallback(async () => {
+       console.log('🔍 Frontend: checkAuthAndLoadData STARTED');
+       console.log('🔍 Frontend: window.location.search at start:', window.location.search);
+       
+     try {
+       // Extraer token de sesión de la URL si existe
+       const urlParams = new URLSearchParams(window.location.search);
+       const sessionToken = urlParams.get('token');
       
-      // Verificar autenticación usando URL del dominio principal
-      const authBody: any = {
-        projectId: 'onboardingaudit',
-        userId: 'luisdaniel883@gmail.com_onboardingaudit'
-      };
+      console.log('🔍 Frontend: URL search params:', window.location.search);
+      console.log('🔍 Frontend: Extracted sessionToken:', sessionToken);
       
-      // Agregar sessionToken si existe
+      // Limpiar la URL después de extraer el token
       if (sessionToken) {
-        authBody.sessionToken = sessionToken;
-        console.log('🔧 Including sessionToken in auth request');
-      } else {
-        console.log('🔧 No sessionToken available');
-      }
-      
-      console.log('🔧 Sending auth request with body:', authBody);
-      
-      const authResponse = await fetch('https://uaylabs.web.app/onboardingaudit/api/auth/check', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(authBody)
-      });
-
-      if (!authResponse.ok) {
-        const authError = await authResponse.json();
-        console.log('❌ Auth check failed:', authError);
-        
-        // TEMPORAL: No redirigir automáticamente para poder debuggear
-        setError(`Authentication failed: ${authError.message || 'Unknown error'}`);
-        setIsLoading(false);
-        return;
-        
-        // if (authError.requiresLogin) {
-        //   // Redirigir al login si requiere autenticación
-        //   router.push('/onboardingaudit/login');
-        //   return;
-        // } else {
-        //   setError('Access denied. Only authorized administrators can view this panel.');
-        //   setIsLoading(false);
-        //   return;
-        // }
+        window.history.replaceState({}, document.title, window.location.pathname);
+        console.log('🔍 Frontend: URL cleaned, sessionToken extracted');
       }
 
-      const authData = await authResponse.json();
-      
-      if (authData.email !== 'luisdaniel883@gmail.com') {
-        setError('Access denied. Only authorized administrators can view this panel.');
-        setIsLoading(false);
-        return;
-      }
-
-      setUserEmail(authData.email);
-      
-      // Guardar el sessionToken si se devuelve uno nuevo
-      if (authData.sessionToken && !sessionToken) {
-        setSessionToken(authData.sessionToken);
-      }
-
-      // Cargar datos de formularios usando URL del dominio principal
-      const submissionsResponse = await fetch('https://uaylabs.web.app/onboardingaudit/api/admin/submissions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      // Si tenemos un sessionToken, intentar autenticación con sesión
+      if (sessionToken) {
+        const requestBody = {
           projectId: 'onboardingaudit',
-          userId: 'luisdaniel883@gmail.com_onboardingaudit'
-        })
-      });
+          sessionToken: sessionToken
+        };
+        
+        console.log('🔍 Frontend: Making auth request with body:', requestBody);
+        
+        const authResponse = await fetch('https://api-fu54nvsqfa-uc.a.run.app/api/auth/check', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(requestBody)
+        });
 
-      if (submissionsResponse.ok) {
-        const data = await submissionsResponse.json();
-        setSubmissions(data.submissions || []);
-        setPendingCount(data.pendingCount || 0);
+        if (authResponse.ok) {
+          const authData = await authResponse.json();
+          if (authData.success) {
+            setIsAuthenticated(true);
+            // Store the user's email for future reference
+            const clientId = authData.clientId || 'e34cada489125b06714195f25d820e3da84333c4166548bba77e1952e05a6912';
+            setUserClientId(clientId);
+          
+            // Cargar submissions usando el clientId que acabamos de recibir
+            const submissionsResponse = await fetch('https://api-fu54nvsqfa-uc.a.run.app/api/admin/submissions', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                projectId: 'onboardingaudit',
+                clientId: clientId
+              })
+            });
+
+            if (submissionsResponse.ok) {
+              const submissionsData = await submissionsResponse.json();
+              setSubmissions(submissionsData.submissions || []);
+              
+              // Calcular stats
+              const total = submissionsData.submissions?.length || 0;
+              const pending = submissionsData.submissions?.filter((s: any) => s.status === 'pending').length || 0;
+              const synced = submissionsData.submissions?.filter((s: any) => s.status === 'synced').length || 0;
+              const inProgress = submissionsData.submissions?.filter((s: any) => s.status === 'in_progress').length || 0;
+              const completed = submissionsData.submissions?.filter((s: any) => s.status === 'completed').length || 0;
+              const error = submissionsData.submissions?.filter((s: any) => s.status === 'error').length || 0;
+              
+              setStats({ total, pending, completed: completed + inProgress, error });
+            }
+          } else {
+            setIsAuthenticated(false);
+            router.push('/onboardingaudit/login');
+          }
+        } else {
+          setIsAuthenticated(false);
+          router.push('/onboardingaudit/login');
+        }
       } else {
-        setError('Error loading submissions data.');
+        setIsAuthenticated(false);
+        router.push('/onboardingaudit/login');
       }
     } catch (error) {
       setError('Authentication failed. Please login again.');
+      setIsAuthenticated(false);
       router.push('/onboardingaudit/login');
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [router]);
 
-  const handleLogout = async () => {
+  const handleLogout = useCallback(async () => {
     try {
-      const logoutBody: any = {
-        projectId: 'onboardingaudit',
-        userId: 'luisdaniel883@gmail.com_onboardingaudit'
-      };
-      
-      // Agregar sessionToken si existe
-      if (sessionToken) {
-        logoutBody.sessionToken = sessionToken;
-      }
-      
-      await fetch('https://uaylabs.web.app/onboardingaudit/api/auth/logout', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(logoutBody)
-      });
-      
-      // Limpiar el sessionToken local y localStorage
-      setSessionToken('');
-      localStorage.removeItem('onboardingaudit_sessionToken');
-      router.push('/onboardingaudit/login');
-    } catch (error) {
-      console.error('Logout error:', error);
-      // Aún limpiar localStorage incluso si el logout falla
-      localStorage.removeItem('onboardingaudit_sessionToken');
-      router.push('/onboardingaudit/login');
-    }
-  };
-
-  const handleStatusUpdate = async (submissionId: string, newStatus: string) => {
-    try {
-      const response = await fetch('https://uaylabs.web.app/onboardingaudit/api/admin/updateSubmissionStatus', {
+      await fetch('https://api-fu54nvsqfa-uc.a.run.app/api/auth/logout', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           projectId: 'onboardingaudit',
-          userId: 'luisdaniel883@gmail.com_onboardingaudit',
+          clientId: userClientId || 'e34cada489125b06714195f25d820e3da84333c4166548bba77e1952e05a6912'
+        })
+      });
+    } catch (error) {
+      // Silent fail for logout
+    } finally {
+      setIsAuthenticated(false);
+      router.push('/onboardingaudit/login');
+    }
+  }, [router, userClientId]);
+
+  const handleStatusUpdate = useCallback(async (submissionId: string, newStatus: string) => {
+    try {
+      const response = await fetch('https://api-fu54nvsqfa-uc.a.run.app/api/admin/updateSubmissionStatus', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          projectId: 'onboardingaudit',
+          clientId: userClientId || 'e34cada489125b06714195f25d820e3da84333c4166548bba77e1952e05a6912',
           submissionId,
           newStatus
         })
       });
 
       if (response.ok) {
-        // Recargar datos después de actualizar estado
+        // Recargar datos
         await checkAuthAndLoadData();
-      } else {
-        setError('Error updating submission status.');
       }
     } catch (error) {
-      console.error('Status update error:', error);
-      setError('Failed to update submission status.');
+      setError('Failed to update status');
     }
-  };
+  }, [checkAuthAndLoadData, userClientId]);
 
-  const handleProcessSubmissions = async () => {
+  const handleProcessSubmissions = useCallback(async () => {
     try {
-      setError('');
-      const response = await fetch('https://uaylabs.web.app/onboardingaudit/api/admin/processSubmissions', {
+      const response = await fetch('https://api-fu54nvsqfa-uc.a.run.app/api/admin/processSubmissions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           projectId: 'onboardingaudit',
-          userId: 'luisdaniel883@gmail.com_onboardingaudit'
+          clientId: userClientId || 'e34cada489125b06714195f25d820e3da84333c4166548bba77e1952e05a6912'
         })
       });
 
       if (response.ok) {
-        const result = await response.json();
-        console.log('✅ Submissions processed:', result);
-        // Recargar datos después de procesar
+        // Recargar datos
         await checkAuthAndLoadData();
-      } else {
-        const errorData = await response.json();
-        setError(`Error processing submissions: ${errorData.message || 'Unknown error'}`);
       }
     } catch (error) {
-      console.error('Process submissions error:', error);
-      setError('Failed to process submissions.');
+      setError('Failed to process submissions');
     }
-  };
+  }, [checkAuthAndLoadData, userClientId]);
 
-  const handleCleanupSessions = async () => {
+  const handleCleanupSessions = useCallback(async () => {
     try {
-      setError('');
-      const response = await fetch('https://uaylabs.web.app/onboardingaudit/api/admin/cleanupSessions', {
+      const response = await fetch('https://api-fu54nvsqfa-uc.a.run.app/api/admin/cleanupSessions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           projectId: 'onboardingaudit',
-          userId: 'luisdaniel883@gmail.com_onboardingaudit'
+          clientId: userClientId || 'e34cada489125b06714195f25d820e3da84333c4166548bba77e1952e05a6912'
         })
       });
 
       if (response.ok) {
-        const result = await response.json();
-        console.log('✅ Sessions cleaned up:', result);
-        setError(''); // Limpiar errores previos
-      } else {
-        const errorData = await response.json();
-        setError(`Error cleaning up sessions: ${errorData.message || 'Unknown error'}`);
+        // Recargar datos
+        await checkAuthAndLoadData();
       }
     } catch (error) {
-      console.error('Cleanup sessions error:', error);
-      setError('Failed to cleanup sessions.');
+      setError('Failed to cleanup sessions');
     }
-  };
+  }, [checkAuthAndLoadData, userClientId]);
 
-  const getStatusBadge = (status: string) => {
-    const statusConfig = {
-      pending: { color: 'bg-yellow-500', text: 'Pending' },
-      synced: { color: 'bg-purple-500', text: 'Synced' },
-      in_progress: { color: 'bg-blue-500', text: 'In Progress' },
-      completed: { color: 'bg-green-500', text: 'Completed' }
-    };
+  useEffect(() => {
+    console.log('🔍 Frontend: useEffect triggered, calling checkAuthAndLoadData');
+    console.log('🔍 Frontend: AdminPanel component mounted');
+    console.log('🔍 Frontend: Current URL:', window.location.href);
+    console.log('🔍 Frontend: URL search params:', window.location.search);
+    
+    // Agregar un pequeño delay para asegurar que la URL esté completamente cargada
+    const timer = setTimeout(() => {
+      console.log('🔍 Frontend: Timer fired, now calling checkAuthAndLoadData');
+      checkAuthAndLoadData();
+    }, 100); // Solo 100ms de delay
 
-    const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.pending;
-
-    return (
-      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium text-white ${config.color}`}>
-        {config.text}
-      </span>
-    );
-  };
+    return () => clearTimeout(timer);
+  }, [checkAuthAndLoadData]);
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-600 via-blue-700 to-blue-800 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
-          <p className="text-white">Loading admin panel...</p>
-        </div>
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
       </div>
     );
   }
 
+  if (!isAuthenticated) {
+    return null; // Router will redirect to login
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-600 via-blue-700 to-blue-800">
+    <div className="min-h-screen bg-gray-100">
       <Head>
         <title>Admin Panel - Onboarding Audit</title>
-        <meta name="description" content="Administration panel for Onboarding Audit submissions" />
+        <meta name="description" content="Administrator panel for Onboarding Audit module" />
       </Head>
 
       <div className="container mx-auto px-4 py-8">
-        {/* Header */}
         <div className="flex justify-between items-center mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-white mb-2">Onboarding Audit Admin</h1>
-            <p className="text-gray-300">Manage audit submissions and track analytics</p>
+            <h1 className="text-3xl font-bold text-gray-900">Admin Panel</h1>
+            <p className="text-gray-600">Onboarding Audit Administration</p>
           </div>
-          <div className="flex items-center space-x-4">
-            <span className="text-sm text-gray-300">
-              Logged in as: <span className="text-white font-medium">{userEmail}</span>
-            </span>
-            <button
-              onClick={handleLogout}
-              className="btn-secondary text-sm px-4 py-2"
-            >
-              Logout
-            </button>
-          </div>
-        </div>
-
-        {/* Tab Navigation */}
-        <div className="flex space-x-1 mb-6 bg-white/10 rounded-lg p-1">
           <button
-            onClick={() => setActiveTab('submissions')}
-            className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
-              activeTab === 'submissions'
-                ? 'bg-white text-gray-900'
-                : 'text-gray-300 hover:text-white'
-            }`}
+            onClick={handleLogout}
+            className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors"
           >
-            Submissions
-          </button>
-          <button
-            onClick={() => setActiveTab('analytics')}
-            className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
-              activeTab === 'analytics'
-                ? 'bg-white text-gray-900'
-                : 'text-gray-300 hover:text-white'
-            }`}
-          >
-            Analytics
+            Logout
           </button>
         </div>
 
         {error && (
-          <div className="mb-6 p-4 bg-red-500/20 border border-red-500/30 rounded-lg">
-            <p className="text-red-200">{error}</p>
+          <div className="mb-6 p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg">
+            {error}
           </div>
         )}
 
-        {/* Content based on active tab */}
-        {activeTab === 'submissions' ? (
-          <>
-            {/* Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
-              <div className="card text-center">
-                <div className="text-2xl font-bold text-white">{submissions.length}</div>
-                <div className="text-sm text-gray-300">Total Submissions</div>
-              </div>
-              <div className="card text-center">
-                <div className="text-2xl font-bold text-yellow-400">
-                  {pendingCount}
-                </div>
-                <div className="text-sm text-gray-300">Pending</div>
-              </div>
-              <div className="card text-center">
-                <div className="text-2xl font-bold text-purple-400">
-                  {submissions.filter(s => s.status === 'synced').length}
-                </div>
-                <div className="text-sm text-gray-300">Synced</div>
-              </div>
-              <div className="card text-center">
-                <div className="text-2xl font-bold text-blue-400">
-                  {submissions.filter(s => s.status === 'in_progress').length}
-                </div>
-                <div className="text-sm text-gray-300">In Progress</div>
-              </div>
-              <div className="card text-center">
-                <div className="text-2xl font-bold text-green-400">
-                  {submissions.filter(s => s.status === 'completed').length}
-                </div>
-                <div className="text-sm text-gray-300">Completed</div>
-              </div>
-            </div>
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h3 className="text-lg font-semibold text-gray-900">Total Submissions</h3>
+            <p className="text-3xl font-bold text-blue-600">{memoizedStats.total}</p>
+          </div>
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h3 className="text-lg font-semibold text-gray-900">Pending</h3>
+            <p className="text-3xl font-bold text-yellow-600">{memoizedStats.pending}</p>
+          </div>
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h3 className="text-lg font-semibold text-gray-900">Completed</h3>
+            <p className="text-3xl font-bold text-green-600">{memoizedStats.completed}</p>
+          </div>
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h3 className="text-lg font-semibold text-gray-900">Errors</h3>
+            <p className="text-3xl font-bold text-red-600">{memoizedStats.error}</p>
+          </div>
+        </div>
 
-            {/* Submissions Table */}
-            <div className="card">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl font-semibold text-white">Audit Submissions</h2>
-                <div className="flex space-x-3">
-                  <button
-                    onClick={handleProcessSubmissions}
-                    disabled={pendingCount === 0}
-                    className="btn-primary text-sm px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Process Pending ({pendingCount})
-                  </button>
-                  <button
-                    onClick={handleCleanupSessions}
-                    className="btn-secondary text-sm px-4 py-2"
-                    title="Remove expired sessions from database to free up space and improve security"
-                  >
-                    Cleanup Sessions
-                  </button>
-                  <button
-                    onClick={checkAuthAndLoadData}
-                    className="btn-secondary text-sm px-4 py-2"
-                  >
-                    Refresh
-                  </button>
-                </div>
-              </div>
+        {/* Action Buttons */}
+        <div className="flex gap-4 mb-8">
+          <button
+            onClick={handleProcessSubmissions}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition-colors"
+          >
+            Process Submissions
+          </button>
+          <button
+            onClick={handleCleanupSessions}
+            className="bg-gray-600 hover:bg-gray-700 text-white px-6 py-2 rounded-lg transition-colors"
+          >
+            Cleanup Sessions
+          </button>
+        </div>
 
-          {submissions.length === 0 ? (
-            <div className="text-center py-12">
-              <div className="w-16 h-16 bg-gray-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-              </div>
-              <p className="text-gray-300">No submissions found</p>
-              <p className="text-sm text-gray-400 mt-2">Audit submissions will appear here once users submit their forms</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-gray-600">
-                    <th className="text-left py-3 px-4 text-white font-medium">User</th>
-                    <th className="text-left py-3 px-4 text-white font-medium">Product</th>
-                    <th className="text-left py-3 px-4 text-white font-medium">Target User</th>
-                    <th className="text-left py-3 px-4 text-white font-medium">Goal</th>
-                    <th className="text-left py-3 px-4 text-white font-medium">Status</th>
-                    <th className="text-left py-3 px-4 text-white font-medium">Date</th>
-                    <th className="text-left py-3 px-4 text-white font-medium">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {submissions.map((submission) => (
-                    <tr key={submission.id} className="border-b border-gray-600/30 hover:bg-white/5">
-                      <td className="py-3 px-4">
-                        <div>
-                          <div className="text-white font-medium">{submission.email}</div>
-                        </div>
+        {/* Analytics Dashboard */}
+        <Suspense fallback={<AnalyticsLoading />}>
+          <AnalyticsDashboard />
+        </Suspense>
+
+        {/* Submissions Table */}
+        <div className="bg-white rounded-lg shadow-md overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-200">
+            <h2 className="text-xl font-semibold text-gray-900">Recent Submissions</h2>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    ID
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Email
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Status
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Created
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {submissions && submissions.length > 0 ? (
+                  submissions.map((submission: any) => (
+                    <tr key={submission.id}>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        {submission.id}
                       </td>
-                      <td className="py-3 px-4">
-                        <div>
-                          <div className="text-white font-medium">{submission.productName}</div>
-                          <div className="text-sm text-gray-400 truncate max-w-xs">
-                            <a href={submission.productUrl} target="_blank" rel="noopener noreferrer" 
-                               className="hover:text-blue-300 transition-colors">
-                              {submission.productUrl}
-                            </a>
-                          </div>
-                        </div>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {submission.email}
                       </td>
-                      <td className="py-3 px-4 text-gray-300">{submission.targetUser}</td>
-                      <td className="py-3 px-4 text-gray-300">{submission.mainGoal}</td>
-                      <td className="py-3 px-4">{getStatusBadge(submission.status)}</td>
-                      <td className="py-3 px-4 text-gray-300">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <StatusBadge status={submission.status} />
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {new Date(submission.createdAt).toLocaleDateString()}
                       </td>
-                      <td className="py-3 px-4">
-                        <div className="flex space-x-2">
-                          <button
-                            className="text-blue-400 hover:text-blue-300 text-sm"
-                            onClick={() => window.open(submission.folderId ? `https://drive.google.com/drive/folders/${submission.folderId}` : '#', '_blank')}
-                          >
-                            View Files
-                          </button>
-                          {submission.status === 'pending' && (
-                            <button
-                              className="text-purple-400 hover:text-purple-300 text-sm"
-                              onClick={() => handleStatusUpdate(submission.id, 'synced')}
-                            >
-                              Mark Synced
-                            </button>
-                          )}
-                          {submission.status === 'synced' && (
-                            <button
-                              className="text-yellow-400 hover:text-yellow-300 text-sm"
-                              onClick={() => handleStatusUpdate(submission.id, 'in_progress')}
-                            >
-                              Start Work
-                            </button>
-                          )}
-                          {submission.status === 'in_progress' && (
-                            <button
-                              className="text-green-400 hover:text-green-300 text-sm"
-                              onClick={() => handleStatusUpdate(submission.id, 'completed')}
-                            >
-                              Mark Complete
-                            </button>
-                          )}
-                          {submission.status === 'completed' && (
-                            <span className="text-green-400 text-sm">✓ Completed</span>
-                          )}
-                        </div>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <select
+                          value={submission.status}
+                          onChange={(e) => handleStatusUpdate(submission.id, e.target.value)}
+                          className="border border-gray-300 rounded px-2 py-1 text-sm"
+                        >
+                          <option value="pending">Pending</option>
+                          <option value="synced">Synced to Drive</option>
+                          <option value="in_progress">In Progress</option>
+                          <option value="completed">Completed</option>
+                          <option value="error">Error</option>
+                        </select>
                       </td>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-4 text-center text-sm text-gray-500">
+                      No submissions found
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
-        </>
-      ) : (
-        <AnalyticsDashboard projectId="onboardingaudit" />
-      )}
-
-      {/* Footer */}
-      <div className="text-center mt-8">
-        <a 
-          href="/onboardingaudit" 
-          className="text-gray-300 hover:text-white transition-colors text-sm"
-        >
-          ← Back to Audit Form
-        </a>
-      </div>
       </div>
     </div>
   );

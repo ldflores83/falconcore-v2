@@ -1,25 +1,43 @@
 // functions/src/oauth/callback.ts
 
-import { Request, Response } from "express";
+import { Request, Response } from 'express';
 import { google } from 'googleapis';
+import { OAuth2Client } from 'google-auth-library';
 import { StorageProviderFactory } from '../storage/utils/providerFactory';
-import { getUserInfoFromToken } from './oauth_projects';
+import { getOAuthConfig } from './oauth_projects';
 import { saveOAuthData } from './saveOAuthData';
-import { getOAuthConfig } from '../config';
-import * as admin from 'firebase-admin';
-import * as crypto from 'crypto';
+import { getUserInfoFromToken } from './oauth_projects';
+import { createAdminSession } from '../api/auth/check';
+import { generateClientId } from '../utils/hash';
+import { SecretManagerServiceClient } from '@google-cloud/secret-manager';
+
+const secretManagerClient = new SecretManagerServiceClient();
+
+// Helper function to validate ENCRYPTION_KEY
+async function validateEncryptionKey(): Promise<void> {
+  try {
+    const projectId = 'falconcore-v2';
+    const secretName = `projects/${projectId}/secrets/ENCRYPTION_KEY/versions/latest`;
+    
+    const [version] = await secretManagerClient.accessSecretVersion({ name: secretName });
+    
+    const key = version.payload?.data?.toString().trim() || '';
+    
+    if (!key || Buffer.from(key, 'hex').length !== 32) {
+      throw new Error("ENCRYPTION_KEY must be defined and 32 bytes long (hex string).");
+    }
+  } catch (error) {
+    throw new Error(`Missing or invalid ENCRYPTION_KEY, aborting OAuth flow: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+}
 
 export const callback = async (req: Request, res: Response) => {
-  console.log('🔧 OAuth callback started - UPDATED VERSION');
-  console.log('🔧 Callback request query:', req.query);
-  
   try {
+    console.log('🔄 OAuth Callback: Starting OAuth callback process...');
     const { code, state } = req.query;
 
-    console.log('🔧 Callback parameters:', { code: !!code, state });
-
     if (!code || !state) {
-      console.error('❌ Missing required parameters:', { code: !!code, state });
+      console.log('❌ OAuth Callback: Missing code or state parameters');
       return res.status(400).json({
         success: false,
         message: "Missing required parameters: code and state"
@@ -28,16 +46,9 @@ export const callback = async (req: Request, res: Response) => {
 
     // El state es directamente el projectId según el flujo documentado
     const projectId = state as string;
-    console.log('🔧 Project ID from state:', projectId);
 
     // Configurar OAuth2
-    console.log('🔧 Getting OAuth config...');
     const oauthConfig = await getOAuthConfig();
-    console.log('🔧 OAuth config obtained:', {
-      hasClientId: !!oauthConfig.clientId,
-      hasClientSecret: !!oauthConfig.clientSecret,
-      redirectUri: oauthConfig.redirectUri
-    });
     
     const oauth2Client = new google.auth.OAuth2(
       oauthConfig.clientId,
@@ -46,62 +57,50 @@ export const callback = async (req: Request, res: Response) => {
     );
 
     // Intercambiar código por tokens
-    console.log('🔧 Exchanging code for tokens...');
     const { tokens } = await oauth2Client.getToken(code as string);
-    console.log('🔧 Tokens obtained:', {
-      hasAccessToken: !!tokens.access_token,
-      hasRefreshToken: !!tokens.refresh_token,
-      hasExpiryDate: !!tokens.expiry_date
-    });
     
     if (!tokens.access_token) {
       throw new Error("Failed to get access token");
     }
 
+    // 🔐 VALIDATE ENCRYPTION_KEY IMMEDIATELY AFTER RECEIVING TOKENS
+    // This prevents any Drive operations if encryption is not properly configured
+    try {
+      await validateEncryptionKey();
+    } catch (error) {
+      console.error('❌ OAuth Callback: ENCRYPTION_KEY validation failed:', error);
+      const errorUrl = `https://uaylabs.web.app/${projectId}/login?error=encryption_failed`;
+      return res.redirect(errorUrl);
+    }
+
     // Obtener información real del usuario autenticado
-    console.log('🔧 Getting user info from token...');
     const userInfo = await getUserInfoFromToken(tokens);
     const authenticatedEmail = userInfo.email;
-    console.log('🔧 User info obtained:', {
-      email: authenticatedEmail,
-      name: userInfo.name,
-      picture: userInfo.picture
-    });
 
     if (!authenticatedEmail) {
       throw new Error("Could not retrieve user email from OAuth");
     }
 
-    console.log('✅ OAuth tokens obtained:', {
-      authenticatedEmail,
-      projectId,
-      hasAccessToken: !!tokens.access_token,
-      hasRefreshToken: !!tokens.refresh_token
-    });
+    // Generar clientId único basado en email y projectId
+    const clientId = generateClientId(authenticatedEmail, projectId);
 
     // Crear provider y probar conexión
-    console.log('🔧 Creating storage provider...');
     const provider = StorageProviderFactory.createProvider('google');
     
     try {
-      // Probar creación de carpeta con el email real del usuario
-      console.log('🔧 Creating folder in Google Drive...');
+      // Verificar si ya existe la carpeta de trabajo
+      const folderName = `${projectId}_${authenticatedEmail}`;
       
-      // Pasar los tokens directamente al provider en lugar de usar Firestore
-      const folderId = await provider.createFolderWithTokens(
-        authenticatedEmail, 
-        projectId, 
+      let folderId = await provider.findOrCreateFolder(
+        folderName,
+        projectId,
         tokens.access_token,
         tokens.refresh_token || undefined
       );
       
-      console.log('🔧 Folder created:', folderId);
-      
-      // Guardar datos OAuth en Firestore
-      console.log('🔧 Saving OAuth data to Firestore...');
-      const userId = `${authenticatedEmail}_${projectId}`;
+      // Guardar datos OAuth en Firestore usando clientId como clave
       await saveOAuthData({
-        userId,
+        clientId,
         projectId,
         accessToken: tokens.access_token,
         refreshToken: tokens.refresh_token || undefined,
@@ -109,58 +108,30 @@ export const callback = async (req: Request, res: Response) => {
         folderId,
         email: authenticatedEmail
       });
-      console.log('🔧 OAuth data saved to Firestore');
       
       // Crear sesión de administrador
-      console.log('🔧 Creating admin session...');
-      const sessionToken = crypto.randomBytes(32).toString('hex');
-      const sessionData = {
-        userId,
-        projectId,
-        email: authenticatedEmail,
-        createdAt: admin.firestore.Timestamp.now(),
-        expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + (24 * 60 * 60 * 1000)), // 24 horas
-        userAgent: req.headers['user-agent'] || 'unknown',
-        ipAddress: req.ip || req.connection.remoteAddress || 'unknown'
-      };
+      console.log('🔄 OAuth Callback: Creating admin session for:', authenticatedEmail, projectId);
+      const sessionToken = await createAdminSession(authenticatedEmail, projectId);
+      console.log('✅ OAuth Callback: Admin session created with token:', sessionToken);
       
-      await admin.firestore().collection('admin_sessions').doc(sessionToken).set(sessionData);
-      console.log('🔧 Admin session created:', sessionToken);
+      // Redirigir directamente al admin panel
+      const adminUrl = `https://uaylabs.web.app/${projectId}/admin?token=${sessionToken}`;
+      console.log('🔄 OAuth Callback: Redirecting to admin panel:', adminUrl);
       
-      console.log('✅ OAuth callback successful:', {
-        authenticatedEmail,
-        projectId,
-        folderId,
-        sessionToken,
-        timestamp: new Date().toISOString()
-      });
-
-      // Redirigir al dashboard con el token de sesión
-      const dashboardUrl = `https://uaylabs.web.app/onboardingaudit/admin?session=${sessionToken}`;
-      return res.redirect(dashboardUrl);
-
+      return res.redirect(adminUrl);
+      
     } catch (error) {
-      console.error('❌ Error testing provider after OAuth:', error);
-      
-      return res.status(500).json({
-        success: false,
-        message: "OAuth successful but provider test failed",
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
+      console.error('❌ OAuth Callback: Error in folder creation or data saving:', error);
+      // En caso de error, redirigir a una página de error
+      const errorUrl = `https://uaylabs.web.app/${projectId}/login?error=auth_failed`;
+      return res.redirect(errorUrl);
     }
-
-  } catch (error) {
-    console.error('❌ Error in OAuth callback:', error);
-    console.error('❌ Error details:', {
-      name: (error as any).name,
-      message: (error as any).message,
-      stack: (error as any).stack
-    });
     
-    return res.status(500).json({
-      success: false,
-      message: "OAuth callback failed",
-      error: error instanceof Error ? error.message : 'Unknown error'
-    });
+  } catch (error) {
+    console.error('❌ OAuth Callback: General error:', error);
+    // En caso de error general, redirigir a login
+    const errorUrl = `https://uaylabs.web.app/onboardingaudit/login?error=oauth_failed`;
+    return res.redirect(errorUrl);
   }
 };
+

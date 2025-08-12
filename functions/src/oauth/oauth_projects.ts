@@ -15,7 +15,7 @@ import { getOAuthSecrets } from '../services/secretManager';
  */
 
 // 🔐 Configuración modular por producto
-const getOAuthConfig = async (projectId: string) => {
+export const getOAuthConfig = async (projectId?: string) => {
   try {
     // Intentar obtener desde Secret Manager
     const secrets = await getOAuthSecrets();
@@ -36,19 +36,12 @@ const getOAuthConfig = async (projectId: string) => {
 
 // 📤 Scopes que solicitamos al usuario al hacer login
 export const OAUTH_SCOPES = [
-  'https://www.googleapis.com/auth/drive.file',
-  'https://www.googleapis.com/auth/userinfo.email',
-  'https://www.googleapis.com/auth/userinfo.profile'
+  'https://www.googleapis.com/auth/drive.file', // Solo archivos creados por la app
+  'https://www.googleapis.com/auth/userinfo.email' // Solo para obtener el email
 ];
 
-// 🔄 Devuelve un cliente OAuth configurado para el producto correspondiente
-export const getOAuthClient = async (projectId: string): Promise<OAuth2Client> => {
-  const config = await getOAuthConfig(projectId);
-
-  if (!config) {
-    throw new Error(`No OAuth config found for project_id: ${projectId}`);
-  }
-
+// 🔧 Función para crear cliente OAuth2
+export const getOAuthClient = (config: { clientId: string; clientSecret: string; redirectUri: string }) => {
   return new google.auth.OAuth2(
     config.clientId,
     config.clientSecret,
@@ -56,19 +49,25 @@ export const getOAuthClient = async (projectId: string): Promise<OAuth2Client> =
   );
 };
 
-// 🔁 Intercambia el código de autorización recibido por los tokens reales
-export const exchangeCodeForTokens = async (code: string, projectId: string) => {
-  const oauth2Client = await getOAuthClient(projectId);
-  const { tokens } = await oauth2Client.getToken(code);
-  return tokens;
+// 🔄 Función para intercambiar código por tokens
+export const exchangeCodeForTokens = async (
+  oauth2Client: OAuth2Client,
+  code: string
+) => {
+  return await oauth2Client.getToken(code);
 };
 
-// 👤 Usa los tokens para obtener los datos del usuario (email, nombre, etc.)
-export const getUserInfoFromToken = async (tokens: any): Promise<oauth2_v2.Schema$Userinfo> => {
+// 👤 Función para obtener información del usuario desde el token
+export const getUserInfoFromToken = async (tokens: any) => {
   const oauth2Client = new google.auth.OAuth2();
   oauth2Client.setCredentials(tokens);
-
+  
   const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
   const userInfo = await oauth2.userinfo.get();
-  return userInfo.data;
+  
+  return {
+    email: userInfo.data.email,
+    name: userInfo.data.name,
+    picture: userInfo.data.picture
+  };
 };

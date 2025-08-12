@@ -1,67 +1,45 @@
 // functions/src/oauth/check.ts
 
-import { Request, Response } from "express";
-import { getOAuthCredentials, getValidAccessToken } from './getOAuthCredentials';
+import { Request, Response } from 'express';
+import { getOAuthCredentials } from './getOAuthCredentials';
 
 export const check = async (req: Request, res: Response) => {
   try {
-    const { projectId, userId } = req.body;
+    const { clientId } = req.query;
 
-    if (!projectId || !userId) {
+    if (!clientId) {
       return res.status(400).json({
         success: false,
-        message: "Missing required parameters: projectId and userId"
+        message: "Missing clientId parameter"
       });
     }
 
-    // Verificar que el userId corresponde al email autorizado
-    if (!userId.includes('luisdaniel883@gmail.com')) {
-      return res.status(403).json({
-        success: false,
-        message: "Access denied. Only authorized administrators can access this panel."
-      });
-    }
+    const credentials = await getOAuthCredentials(clientId as string);
 
-    // Obtener credenciales OAuth
-    const credentials = await getOAuthCredentials(userId);
-    
     if (!credentials) {
       return res.status(401).json({
         success: false,
-        message: "Not authenticated. Please login first."
+        message: "OAuth credentials not found or expired"
       });
     }
-
-    // Verificar que el token es válido
-    const validToken = await getValidAccessToken(userId);
-    
-    if (!validToken) {
-      return res.status(401).json({
-        success: false,
-        message: "Invalid or expired token. Please login again."
-      });
-    }
-
-    console.log('✅ OAuth check successful:', {
-      userId,
-      projectId,
-      hasValidToken: !!validToken
-    });
 
     return res.status(200).json({
       success: true,
-      message: "Authentication verified",
-      email: 'luisdaniel883@gmail.com',
-      projectId
+      message: "OAuth credentials valid",
+      data: {
+        clientId: credentials.clientId,
+        projectId: credentials.projectId,
+        email: credentials.email,
+        folderId: credentials.folderId,
+        hasValidToken: !!credentials.accessToken
+      }
     });
 
   } catch (error) {
-    console.error('❌ Error in OAuth check:', error);
-    
     return res.status(500).json({
       success: false,
-      message: "Authentication check failed",
-      error: error instanceof Error ? error.message : 'Unknown error'
+      message: "OAuth check failed",
+      error: error instanceof Error ? error.message : "Unknown error"
     });
   }
 }; 

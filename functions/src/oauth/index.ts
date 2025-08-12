@@ -2,39 +2,42 @@
 
 import { Router } from 'express';
 import { login } from './login';
+import { callback } from './callback';
 import { check } from './check';
 import { logout } from './logout';
 
 const router = Router();
 
-// Middleware para debug
+// Middleware para logging de requests OAuth
 router.use((req, res, next) => {
-  console.log('🔧 OAuth router middleware - Request:', {
-    path: req.path,
+  console.log('🔐 OAuth Router: Request received:', {
     method: req.method,
+    path: req.path,
     url: req.url,
-    baseUrl: req.baseUrl,
-    originalUrl: req.originalUrl
+    query: req.query
   });
   next();
 });
 
-console.log('🔧 OAuth router: registering /login endpoint');
+// Rutas OAuth
 router.get('/login', (req, res) => {
-  console.log('🔧 OAuth /login endpoint called');
-  console.log('🔧 Request path:', req.path);
-  console.log('🔧 Request method:', req.method);
-  console.log('🔧 Request url:', req.url);
-  console.log('🔧 Request baseUrl:', req.baseUrl);
-  console.log('🔧 Request originalUrl:', req.originalUrl);
-  console.log('🔧 OAuth router - About to call login function');
+  console.log('🔐 OAuth Router: /login route called');
   return login(req, res);
 });
 
-// Callback se maneja directamente en app.ts para evitar conflictos
-// router.get('/callback', callback); // REMOVIDO - se maneja en app.ts
+router.get('/callback', (req, res) => {
+  console.log('🔐 OAuth Router: /callback route called');
+  return callback(req, res);
+});
 
-router.post('/check', check);
-router.post('/logout', logout);
+router.get('/check', (req, res) => {
+  console.log('🔐 OAuth Router: /check route called');
+  return check(req, res);
+});
+
+router.post('/logout', (req, res) => {
+  console.log('🔐 OAuth Router: /logout route called');
+  return logout(req, res);
+});
 
 export default router;
