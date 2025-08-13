@@ -30,10 +30,39 @@ export default function OnboardingAudit() {
     };
   }, []);
 
-  // Set default state on component mount
+  // Check submission limits on component mount
   useEffect(() => {
-    setIsLoading(false);
-    setCanSubmit(true); // Always allow submission
+    const checkSubmissionLimit = async () => {
+      try {
+        const response = await fetch('https://api-fu54nvsqfa-uc.a.run.app/api/public/checkLimit', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            projectId: 'onboardingaudit'
+          })
+        });
+
+        const result = await response.json();
+        
+        if (result.success) {
+          setCanSubmit(result.canSubmit);
+          setPendingCount(result.activeSubmissions);
+          setStatusMessage(result.message);
+        } else {
+          console.error('Failed to check limit:', result.message);
+          setCanSubmit(true); // Fallback to allowing submission
+        }
+      } catch (error) {
+        console.error('Error checking submission limit:', error);
+        setCanSubmit(true); // Fallback to allowing submission
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    checkSubmissionLimit();
   }, []);
 
   const handleSubmit = (success: boolean, message: string) => {
@@ -154,6 +183,12 @@ export default function OnboardingAudit() {
                     </p>
                   </div>
                   <div className="space-y-3">
+                    <button 
+                      onClick={() => window.location.href = '/onboardingaudit/waitlist'} 
+                      className="btn-primary"
+                    >
+                      Join Waitlist
+                    </button>
                     <button 
                       onClick={() => window.location.reload()} 
                       className="btn-secondary"

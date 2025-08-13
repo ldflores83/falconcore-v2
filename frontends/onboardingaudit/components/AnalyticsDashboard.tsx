@@ -22,6 +22,12 @@ export default function AnalyticsDashboard() {
   useEffect(() => {
     const fetchAnalytics = async () => {
       try {
+        console.log('🚀 Fetching analytics from:', `${baseUrl}/admin/analytics`);
+        console.log('📤 Request payload:', {
+          projectId: 'onboardingaudit',
+          userId: 'luisdaniel883@gmail.com_onboardingaudit'
+        });
+        
         const response = await fetch(`${baseUrl}/admin/analytics`, {
           method: 'POST',
           headers: {
@@ -34,13 +40,36 @@ export default function AnalyticsDashboard() {
         });
 
         if (response.ok) {
-          const data = await response.json();
-          setAnalytics(data);
+          const responseData = await response.json();
+          console.log('📊 Analytics response received:', responseData);
+          
+          if (responseData.success && responseData.data) {
+            // Transformar la respuesta del backend al formato que espera el frontend
+            const transformedData = {
+              totalVisits: responseData.data.summary?.totalVisits || 0,
+              totalSubmissions: responseData.data.summary?.totalSubmissions || 0,
+              conversionRate: responseData.data.summary?.conversionRate || 0,
+              recentActivity: responseData.data.submissions?.slice(0, 5).map((sub: any) => ({
+                timestamp: sub.createdAt?.toDate?.() || sub.createdAt || new Date(),
+                action: `Submission ${sub.status}`,
+                details: `${sub.email} - ${sub.productName || 'Product'}`
+              })) || []
+            };
+            
+            console.log('🔄 Transformed analytics data:', transformedData);
+            setAnalytics(transformedData);
+          } else {
+            console.error('❌ Analytics response format invalid:', responseData);
+            setError('Invalid analytics data format');
+          }
         } else {
-          setError('Failed to load analytics data');
+          const errorText = await response.text();
+          console.error('❌ Analytics API error:', response.status, errorText);
+          setError(`Failed to load analytics data: ${response.status}`);
         }
       } catch (error) {
-        setError('Error loading analytics');
+        console.error('❌ Analytics fetch error:', error);
+        setError(`Error loading analytics: ${error instanceof Error ? error.message : 'Unknown error'}`);
       } finally {
         setIsLoading(false);
       }

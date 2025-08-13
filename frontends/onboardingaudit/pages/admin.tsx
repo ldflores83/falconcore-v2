@@ -3,11 +3,26 @@ import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { Suspense } from 'react';
 
-// Lazy load AnalyticsDashboard
+// Lazy load components
 const AnalyticsDashboard = React.lazy(() => import('../components/AnalyticsDashboard'));
+const WaitlistDashboard = React.lazy(() => import('../components/WaitlistDashboard'));
 
 // Loading component for AnalyticsDashboard
 const AnalyticsLoading = () => (
+  <div className="bg-white rounded-lg shadow-md p-6">
+    <div className="animate-pulse">
+      <div className="h-4 bg-gray-200 rounded w-1/4 mb-4"></div>
+      <div className="space-y-3">
+        <div className="h-4 bg-gray-200 rounded"></div>
+        <div className="h-4 bg-gray-200 rounded w-5/6"></div>
+        <div className="h-4 bg-gray-200 rounded w-4/6"></div>
+      </div>
+    </div>
+  </div>
+);
+
+// Loading component for WaitlistDashboard
+const WaitlistLoading = () => (
   <div className="bg-white rounded-lg shadow-md p-6">
     <div className="animate-pulse">
       <div className="h-4 bg-gray-200 rounded w-1/4 mb-4"></div>
@@ -59,6 +74,7 @@ export default function AdminPanel() {
     completed: 0,
     error: 0
   });
+  const [activeTab, setActiveTab] = useState<'overview' | 'waitlist'>('overview');
   const router = useRouter();
 
   // Memoized constants
@@ -81,19 +97,46 @@ export default function AdminPanel() {
   // Memoized stats
   const memoizedStats = useMemo(() => stats, [stats]);
 
-              const checkAuthAndLoadData = useCallback(async () => {
-     try {
-       // Extraer token de sesión de la URL si existe
-       const urlParams = new URLSearchParams(window.location.search);
-       const sessionToken = urlParams.get('token');
-       
-       // Limpiar la URL después de extraer el token
-       if (sessionToken) {
-         window.history.replaceState({}, document.title, window.location.pathname);
-       }
+                const checkAuthAndLoadData = useCallback(async () => {
+    try {
+      // Primero verificar si hay una sesión guardada en localStorage
+      const savedSession = localStorage.getItem('onboardingaudit_admin_session');
+      let sessionToken = null;
+      let savedClientId = null;
+      
+      if (savedSession) {
+        try {
+          const sessionData = JSON.parse(savedSession);
+          const now = Date.now();
+          
+          // Verificar si la sesión no ha expirado
+          if (sessionData.expiresAt > now) {
+            sessionToken = sessionData.sessionToken;
+            savedClientId = sessionData.clientId;
+            console.log('🔄 Found valid saved session:', sessionData);
+          } else {
+            console.log('⏰ Saved session expired, removing from localStorage');
+            localStorage.removeItem('onboardingaudit_admin_session');
+          }
+        } catch (error) {
+          console.error('❌ Error parsing saved session:', error);
+          localStorage.removeItem('onboardingaudit_admin_session');
+        }
+      }
+      
+      // Si no hay sesión guardada, verificar URL
+      if (!sessionToken) {
+        const urlParams = new URLSearchParams(window.location.search);
+        sessionToken = urlParams.get('token');
+        
+        // Limpiar la URL después de extraer el token
+        if (sessionToken) {
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }
+      }
 
-       // Si tenemos un sessionToken, intentar autenticación con sesión
-       if (sessionToken) {
+      // Si tenemos un sessionToken (de localStorage o URL), intentar autenticación
+      if (sessionToken) {
          const requestBody = {
            projectId: 'onboardingaudit',
            sessionToken: sessionToken
@@ -112,8 +155,18 @@ export default function AdminPanel() {
           if (authData.success) {
             setIsAuthenticated(true);
             // Store the user's email for future reference
-            const clientId = authData.clientId || 'e34cada489125b06714195f25d820e3da84333c4166548bba77e1952e05a6912';
+            const clientId = authData.clientId || savedClientId || 'e34cada489125b06714195f25d820e3da84333c4166548bba77e1952e05a6912';
             setUserClientId(clientId);
+            
+            // Guardar sesión en localStorage para persistencia
+            const sessionData = {
+              clientId: clientId,
+              sessionToken: sessionToken,
+              timestamp: Date.now(),
+              expiresAt: Date.now() + (24 * 60 * 60 * 1000) // 24 horas
+            };
+            localStorage.setItem('onboardingaudit_admin_session', JSON.stringify(sessionData));
+            console.log('✅ Session saved to localStorage:', sessionData);
           
             // Cargar submissions usando el clientId que acabamos de recibir
             const submissionsResponse = await fetch('https://api-fu54nvsqfa-uc.a.run.app/api/admin/submissions', {
@@ -177,6 +230,10 @@ export default function AdminPanel() {
     } catch (error) {
       // Silent fail for logout
     } finally {
+      // Limpiar sesión del localStorage
+      localStorage.removeItem('onboardingaudit_admin_session');
+      console.log('🗑️ Session cleared from localStorage');
+      
       setIsAuthenticated(false);
       router.push('/onboardingaudit/login');
     }
@@ -333,7 +390,38 @@ export default function AdminPanel() {
           </div>
         )}
 
-        {/* Stats Cards */}
+        {/* Tabs */}
+        <div className="mb-8">
+          <div className="border-b border-gray-200">
+            <nav className="-mb-px flex space-x-8">
+              <button
+                onClick={() => setActiveTab('overview')}
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'overview'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Overview
+              </button>
+              <button
+                onClick={() => setActiveTab('waitlist')}
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'waitlist'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Waitlist
+              </button>
+            </nav>
+          </div>
+        </div>
+
+        {/* Overview Tab Content */}
+        {activeTab === 'overview' && (
+          <>
+            {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <div className="bg-white rounded-lg shadow-md p-6">
             <h3 className="text-lg font-semibold text-gray-900">Total Submissions</h3>
@@ -442,6 +530,15 @@ export default function AdminPanel() {
             </table>
           </div>
         </div>
+          </>
+        )}
+
+        {/* Waitlist Tab Content */}
+        {activeTab === 'waitlist' && (
+          <Suspense fallback={<WaitlistLoading />}>
+            <WaitlistDashboard clientId={userClientId || 'e34cada489125b06714195f25d820e3da84333c4166548bba77e1952e05a6912'} />
+          </Suspense>
+        )}
       </div>
     </div>
   );
