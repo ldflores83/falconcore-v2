@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
+import { createAnalyticsTracker } from '../lib/analytics';
+import { OnboardingAuditClient } from '../lib/api';
 import AuditForm from '../components/AuditForm';
 import SuccessMessage from '../components/SuccessMessage';
-import { initAnalytics } from '../lib/analytics';
-import { OnboardingAuditAPI } from '../lib/api';
 
 export default function OnboardingAudit() {
   const [isSubmitted, setIsSubmitted] = useState(false);
@@ -15,7 +15,19 @@ export default function OnboardingAudit() {
 
   // Initialize analytics tracking
   useEffect(() => {
-    initAnalytics('onboardingaudit');
+    const tracker = createAnalyticsTracker('onboardingaudit');
+    tracker.trackPageVisit('home');
+
+    // Track page exit
+    const handleBeforeUnload = () => {
+      tracker.trackPageExit();
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
   }, []);
 
   // Set default state on component mount

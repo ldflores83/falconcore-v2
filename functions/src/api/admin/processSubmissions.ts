@@ -1,34 +1,23 @@
 import { Request, Response } from 'express';
-import { GoogleDriveProvider } from '../../storage/providers/GoogleDriveProvider';
-import { getOAuthCredentials } from '../../oauth/getOAuthCredentials';
-import { uploadToStorage, deleteFromStorage, downloadFromStorage, listFilesInFolder, downloadFolderFromStorage, getStorage } from '../../services/storage';
 import * as admin from 'firebase-admin';
-
-// Función para obtener Firestore de forma lazy
-const getFirestore = () => {
-  if (!admin.apps.length) {
-    admin.initializeApp({
-      projectId: 'falconcore-v2',
-    });
-  }
-  return admin.firestore();
-};
+import { getOAuthCredentials } from '../../oauth/getOAuthCredentials';
+import { StorageProviderFactory } from '../../storage/utils/providerFactory';
+import { generateClientId } from '../../utils/hash';
 
 export const processSubmissions = async (req: Request, res: Response) => {
-  console.log('🚀 processSubmissions handler called');
-  
   try {
-    const { projectId, userId } = req.body;
+    const { projectId, clientId } = req.body;
 
-    if (!projectId || !userId) {
+    if (!projectId || !clientId) {
       return res.status(400).json({
         success: false,
-        message: "Missing required parameters: projectId and userId"
+        message: "Missing required parameters: projectId and clientId"
       });
     }
 
-    // Verificar autenticación del admin
-    if (!userId.includes('luisdaniel883@gmail.com')) {
+    // Verificar que el clientId corresponde al email autorizado
+    const expectedClientId = generateClientId('luisdaniel883@gmail.com', projectId);
+    if (clientId !== expectedClientId) {
       return res.status(403).json({
         success: false,
         message: "Access denied. Only authorized administrators can process submissions."
@@ -36,7 +25,7 @@ export const processSubmissions = async (req: Request, res: Response) => {
     }
 
     // Obtener credenciales OAuth del admin
-    const credentials = await getOAuthCredentials(userId);
+    const credentials = await getOAuthCredentials(clientId);
     
     if (!credentials) {
       return res.status(401).json({
@@ -46,255 +35,223 @@ export const processSubmissions = async (req: Request, res: Response) => {
       });
     }
 
-    console.log('✅ Admin authenticated, processing submissions...');
-
-    // Obtener submissions pendientes de Firestore
-    const db = getFirestore();
-    const snapshot = await db.collection('onboardingaudit_submissions')
+    // Obtener SOLO submissions pendientes de sincronización
+    const submissionsRef = admin.firestore().collection('onboardingaudit_submissions');
+    const submissionsToProcess = await submissionsRef
       .where('status', '==', 'pending')
-      .orderBy('createdAt', 'asc')
       .get();
 
-    if (snapshot.empty) {
+    if (submissionsToProcess.empty) {
       return res.status(200).json({
         success: true,
-        message: "No pending submissions found",
-        processed: []
+        message: "No submissions to process found",
+        data: {
+          processed: 0,
+          total: 0
+        }
       });
     }
 
-    console.log(`📋 Found ${snapshot.docs.length} pending submissions`);
+    let processedCount = 0;
+    let errorCount = 0;
 
-    const results = [];
-    const provider = new GoogleDriveProvider();
+    // 2. Obtener la carpeta de trabajo del admin (carpeta padre)
+    const provider = StorageProviderFactory.createProvider('google');
+    const adminEmail = 'luisdaniel883@gmail.com';
+    const adminWorkFolderName = `${projectId}_${adminEmail}`;
+    const adminWorkFolderId = await provider.findOrCreateFolder(
+      adminWorkFolderName, 
+      projectId, 
+      credentials.accessToken,
+      credentials.refreshToken
+    );
+    
+    console.log(`✅ Using admin work folder: ${adminWorkFolderName} with ID: ${adminWorkFolderId}`);
+    
+    // 3. Procesar cada submission individualmente y crear su carpeta específica DENTRO de la carpeta de trabajo
+    for (const doc of submissionsToProcess.docs) {
+      const submission = doc.data();
+      console.log(`📋 Processing submission ${doc.id} for user ${submission.email}`);
 
-    for (const doc of snapshot.docs) {
-      try {
-        const data = doc.data();
-        console.log(`🔄 Processing submission: ${doc.id}`);
+      // 1. Crear carpeta específica para esta submission DENTRO de la carpeta de trabajo del admin
+      const submissionFolderName = `${submission.email}_${projectId}`;
+      const submissionFolderId = await provider.findOrCreateFolder(
+        submissionFolderName, 
+        projectId, 
+        credentials.accessToken,
+        credentials.refreshToken,
+        adminWorkFolderId // Carpeta padre donde crear la subcarpeta
+      );
+      
+      console.log(`✅ Created submission folder: ${submissionFolderName} with ID: ${submissionFolderId} inside admin work folder`);
 
-        // Crear carpeta en Google Drive para esta submission
-        const adminFolderId = await provider.createFolderWithTokens(
-          'luisdaniel883@gmail.com',
-          projectId,
-          credentials.accessToken,
-          credentials.refreshToken
-        );
-
-        // Crear carpeta específica para esta submission
-        const formFolderName = `${data.productName}_${data.email}_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}`;
-        const formFolderId = await provider.findOrCreateFolder(formFolderName, adminFolderId);
-
-                 // Migrar documento principal de Cloud Storage a Google Drive
-         if (data.documentPath) {
-           const fileName = data.documentPath.split('/').pop();
-           
-           // Descargar contenido desde Cloud Storage
-           console.log(`📥 Downloading document from Cloud Storage: ${data.documentPath}`);
-           const contentBuffer = await downloadFromStorage('falconcore-onboardingaudit-uploads', data.documentPath);
-           
-           if (contentBuffer) {
-             const uploadResult = await provider.uploadFile({
-               folderId: formFolderId,
-               filename: fileName || 'Onboarding_Audit.md',
-               contentBuffer: contentBuffer,
-               mimeType: 'text/markdown'
-             });
-
-             console.log(`✅ Document migrated to Drive: ${uploadResult.id}`);
-
-             // Eliminar archivo de Cloud Storage
-             try {
-               await deleteFromStorage('falconcore-onboardingaudit-uploads', data.documentPath);
-               console.log(`🗑️ Deleted from Cloud Storage: ${data.documentPath}`);
-             } catch (deleteError) {
-               console.warn('⚠️ Could not delete from Cloud Storage:', deleteError);
-             }
-           } else {
-             console.warn('⚠️ Could not download document from Cloud Storage');
-             
-             // Si no se puede migrar el documento principal, no procesar
-             console.log(`❌ Submission ${doc.id} has failed document migration. Skipping processing.`);
-             
-             await doc.ref.update({
-               status: 'pending',
-               processingError: 'Failed to migrate main document',
-               lastProcessingAttempt: new Date(),
-               updatedAt: new Date()
-             });
-             
-             results.push({
-               id: doc.id,
-               status: 'pending',
-               error: 'Failed to migrate main document'
-             });
-             
-             continue; // Saltar al siguiente documento
-           }
-         } else {
-           console.warn(`⚠️ Submission ${doc.id} has no document path`);
-         }
-
-                  // Migrar carpeta de attachments completa desde Cloud Storage a Google Drive
-         const submissionFolderPath = `submissions/${doc.id}`;
-         const attachmentsFolderPath = `${submissionFolderPath}/attachments`;
-         
-         console.log(`🖼️ Migrating attachments folder: ${attachmentsFolderPath}`);
-         
-         // Descargar toda la carpeta de attachments
-         const folderContents = await downloadFolderFromStorage('falconcore-onboardingaudit-uploads', attachmentsFolderPath);
-         
-         if (folderContents.length > 0) {
-           console.log(`📦 Found ${folderContents.length} files in attachments folder`);
-           
-           let successfulUploads = 0;
-           let failedUploads = 0;
-           
-           // Subir todos los archivos de la carpeta a Google Drive
-           for (const file of folderContents) {
-             try {
-               const uploadResult = await provider.uploadFile({
-                 folderId: formFolderId,
-                 filename: file.path,
-                 contentBuffer: file.content,
-                 mimeType: file.mimeType
-               });
-               
-               console.log(`✅ File uploaded to Drive: ${uploadResult.id} (${file.path})`);
-               successfulUploads++;
-             } catch (error) {
-               console.error(`❌ Error uploading file ${file.path}:`, error);
-               failedUploads++;
-             }
-           }
-           
-           console.log(`📊 Folder upload summary: ${successfulUploads} successful, ${failedUploads} failed`);
-           
-           if (failedUploads > 0) {
-             console.log(`❌ Submission ${doc.id} has ${failedUploads} failed uploads. Skipping processing.`);
-             
-             await doc.ref.update({
-               status: 'pending',
-               processingError: `Failed to upload ${failedUploads} files from attachments folder`,
-               lastProcessingAttempt: new Date(),
-               updatedAt: new Date()
-             });
-             
-             results.push({
-               id: doc.id,
-               status: 'pending',
-               error: `Failed to upload ${failedUploads} files from attachments folder`
-             });
-             
-             continue; // Saltar al siguiente documento
-           }
-           
-                       // Si todos los archivos se subieron exitosamente, eliminar la carpeta de attachments
-            console.log(`🧹 Cleaning up attachments folder: ${attachmentsFolderPath}`);
-            try {
-              // Eliminar todos los archivos en la carpeta de attachments
-              const allFilesInAttachments = await listFilesInFolder('falconcore-onboardingaudit-uploads', attachmentsFolderPath);
-              console.log(`🗑️ Found ${allFilesInAttachments.length} files to delete in attachments folder`);
-              
-              for (const filePath of allFilesInAttachments) {
-                try {
-                  await deleteFromStorage('falconcore-onboardingaudit-uploads', filePath);
-                  console.log(`🗑️ Deleted file: ${filePath}`);
-                } catch (deleteError) {
-                  console.warn('⚠️ Could not delete file:', deleteError);
-                }
-              }
-              console.log(`✅ Attachments folder cleaned up`);
-            } catch (cleanupError) {
-              console.warn('⚠️ Could not clean up attachments folder:', cleanupError);
-            }
-         } else {
-           console.log(`📭 No attachments folder found or folder is empty`);
-         }
-
-                 // LIMPIEZA ESPECÍFICA: Borrar solo los archivos de esta submission específica
-         console.log(`🧹 SPECIFIC CLEANUP: Deleting files for submission ${doc.id} only`);
-         try {
-           // Listar solo los archivos de esta submission específica
-           const storage = await getStorage();
-           const bucket = storage.bucket('falconcore-onboardingaudit-uploads');
-           
-           // Obtener solo los archivos de esta submission específica
-           const [files] = await bucket.getFiles({
-             prefix: `submissions/${doc.id}/`
-           });
-           
-           console.log(`🗑️ Found ${files.length} files to delete for submission ${doc.id}:`, files.map(f => f.name));
-           
-           if (files.length > 0) {
-             // Borrar solo los archivos de esta submission
-             for (const file of files) {
-               try {
-                 await file.delete();
-                 console.log(`🗑️ Deleted file: ${file.name}`);
-               } catch (deleteError) {
-                 console.warn('⚠️ Could not delete file:', deleteError);
-               }
-             }
-             console.log(`✅ Submission ${doc.id} files cleaned up`);
-           } else {
-             console.log(`📭 No files found for submission ${doc.id}`);
-           }
-         } catch (cleanupError) {
-           console.warn('⚠️ Could not clean up submission files:', cleanupError);
-         }
-
-                   // Actualizar estado en Firestore a 'synced' (migrado a Drive, listo para trabajar)
-          await doc.ref.update({
-            status: 'synced',
-            driveFolderId: formFolderId,
-            processedAt: new Date(),
-            processedBy: userId
-          });
-
-        results.push({
-          id: doc.id,
-          email: data.email,
-          productName: data.productName,
-          driveFolderId: formFolderId,
-          status: 'in_progress'
-        });
-
-        console.log(`✅ Submission processed: ${doc.id}`);
-
-      } catch (error) {
-        console.error(`❌ Error processing submission ${doc.id}:`, error);
+      // 2. Verificar y subir archivos adjuntos de esta submission desde Cloud Storage
+      if (submission.attachments && submission.attachments.length > 0) {
+        console.log(`📁 Processing ${submission.attachments.length} attachments for ${submission.email}`);
         
-        // Marcar como error en Firestore
-        await doc.ref.update({
-          status: 'error',
-          errorMessage: error instanceof Error ? error.message : 'Unknown error',
-          updatedAt: new Date()
+        const bucket = admin.storage().bucket('falconcore-onboardingaudit-uploads');
+        let validAttachments = 0;
+        
+        for (const attachment of submission.attachments) {
+          try {
+            console.log(`📄 Processing attachment: ${attachment.filename} for ${submission.email}`);
+            
+            // Verificar que el archivo existe en Cloud Storage
+            const file = bucket.file(attachment.filePath);
+            const [exists] = await file.exists();
+            
+            if (!exists) {
+              console.log(`⚠️ File not found in Cloud Storage: ${attachment.filePath}, skipping...`);
+              continue;
+            }
+            
+            // Obtener archivo desde Cloud Storage
+            const fileBuffer = await file.download();
+            
+            console.log(`✅ Downloaded from Cloud Storage: ${attachment.filename}`);
+            
+            // Subir a Google Drive en la carpeta específica de esta submission
+            const uploadResult = await provider.uploadFile({
+              folderId: submissionFolderId,
+              filename: attachment.filename,
+              contentBuffer: fileBuffer[0],
+              mimeType: attachment.mimeType,
+              accessToken: credentials.accessToken,
+              refreshToken: credentials.refreshToken
+            });
+
+            console.log(`✅ File uploaded to Drive: ${uploadResult.id} in folder ${submissionFolderName}`);
+            validAttachments++;
+            
+          } catch (fileError) {
+            console.error(`❌ Error processing file ${attachment.filename}:`, fileError);
+            errorCount++;
+          }
+        }
+        
+        console.log(`📊 Successfully processed ${validAttachments}/${submission.attachments.length} attachments for ${submission.email}`);
+      }
+
+      // 3. Crear documento del formulario para esta submission
+      try {
+        const documentContent = generateFormDocument(submission);
+        const documentBuffer = Buffer.from(documentContent, 'utf-8');
+        const documentFilename = `Onboarding_Audit_${submission.email}_${new Date().toISOString().split('T')[0]}.md`;
+        
+        const documentResult = await provider.uploadFile({
+          folderId: submissionFolderId,
+          filename: documentFilename,
+          contentBuffer: documentBuffer,
+          mimeType: 'text/markdown',
+          accessToken: credentials.accessToken,
+          refreshToken: credentials.refreshToken
         });
 
-        results.push({
-          id: doc.id,
-          status: 'error',
-          error: error instanceof Error ? error.message : 'Unknown error'
-        });
+        console.log(`✅ Document created in Drive: ${documentResult.id} for ${submission.email} in folder ${submissionFolderName}`);
+        processedCount++;
+        
+      } catch (docError) {
+        console.error(`❌ Error creating document for ${submission.email}:`, docError);
+        errorCount++;
       }
     }
 
-    console.log(`✅ Processing complete. ${results.length} submissions processed`);
+    // 5. Limpiar completamente el directorio submissions en Cloud Storage
+    try {
+      console.log(`🧹 Cleaning up Cloud Storage submissions directory...`);
+      const bucket = admin.storage().bucket('falconcore-onboardingaudit-uploads');
+      
+      // Listar todos los archivos en el directorio submissions
+      const [files] = await bucket.getFiles({ prefix: 'submissions/' });
+      
+      if (files.length > 0) {
+        console.log(`🗑️ Found ${files.length} files to delete in Cloud Storage`);
+        
+        // Eliminar todos los archivos
+        await Promise.all(files.map(file => file.delete()));
+        console.log(`✅ All files deleted from Cloud Storage submissions directory`);
+      } else {
+        console.log(`📁 No files found in Cloud Storage submissions directory`);
+      }
+    } catch (cleanupError) {
+      console.error(`❌ Error cleaning up Cloud Storage:`, cleanupError);
+    }
+
+    // 6. Actualizar estado de TODAS las submissions a 'synced' en Firestore
+    console.log(`📝 Updating Firestore status for ${submissionsToProcess.size} submissions...`);
+    
+    for (const doc of submissionsToProcess.docs) {
+      try {
+        const submission = doc.data();
+        const submissionFolderName = `${submission.email}_${projectId}`;
+        
+        await doc.ref.update({
+          status: 'synced',
+          syncedAt: admin.firestore.Timestamp.now(),
+          syncedBy: clientId,
+          driveFolderName: submissionFolderName
+        });
+        
+        console.log(`✅ Submission ${doc.id} marked as synced in Firestore with folder: ${submissionFolderName}`);
+      } catch (updateError) {
+        console.error(`❌ Error updating submission ${doc.id}:`, updateError);
+        errorCount++;
+      }
+    }
+
+    console.log(`🎉 All submissions processed successfully!`);
 
     return res.status(200).json({
       success: true,
-      message: `Successfully processed ${results.length} submissions`,
-      processed: results
+      message: "Submissions synced to Google Drive successfully",
+      data: {
+        processed: processedCount,
+        errors: errorCount,
+        total: submissionsToProcess.size
+      }
     });
 
   } catch (error) {
-    console.error('❌ Error in processSubmissions:', error);
+    console.error('Error in processSubmissions:', error);
     
     return res.status(500).json({
       success: false,
       message: "Failed to process submissions",
-      error: error instanceof Error ? error.message : 'Unknown error'
+      error: error instanceof Error ? error.message : "Unknown error"
     });
   }
-}; 
+};
+
+// Función para generar el documento del formulario
+function generateFormDocument(submission: any): string {
+  const timestamp = new Date().toISOString();
+  
+  return `# Onboarding Audit Request
+
+**Submitted:** ${timestamp}
+**Product:** ${submission.productName}
+**Email:** ${submission.email}
+
+## Product Basics
+- **Product Name:** ${submission.productName}
+- **Product URL:** ${submission.productUrl}
+- **Target User:** ${submission.targetUser}
+
+## Current Onboarding Flow
+- **Signup Method:** ${submission.signupMethod}${submission.signupMethodOther ? ` (${submission.signupMethodOther})` : ''}
+- **First Time Experience:** ${submission.firstTimeExperience}${submission.firstTimeExperienceOther ? ` (${submission.firstTimeExperienceOther})` : ''}
+- **Track Dropoff:** ${submission.trackDropoff}
+
+## Goal & Metrics
+- **Main Goal:** ${submission.mainGoal}
+- **Know Churn Rate:** ${submission.knowChurnRate}
+- **Churn Timing:** ${submission.churnTiming}
+- **Specific Concerns:** ${submission.specificConcerns || 'None specified'}
+
+## Delivery Preferences
+- **Preferred Format:** ${submission.preferredFormat}
+
+---
+*This audit request was submitted through the Onboarding Audit form and will be processed within 48 hours.*
+`;
+} 

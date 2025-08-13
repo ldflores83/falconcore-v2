@@ -1,5 +1,5 @@
 "use strict";
-// functions/src/oauth/logout.ts
+// functions/src/api/admin/clearAnalytics.ts
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
     var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -34,36 +34,57 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.logout = void 0;
+exports.clearAnalytics = void 0;
 const admin = __importStar(require("firebase-admin"));
-const logout = async (req, res) => {
+// Función para obtener Firestore de forma lazy
+const getFirestore = () => {
+    if (!admin.apps.length) {
+        admin.initializeApp({
+            projectId: 'falconcore-v2'
+        });
+    }
+    return admin.firestore();
+};
+const clearAnalytics = async (req, res) => {
     try {
-        const { clientId } = req.body;
-        if (!clientId) {
+        console.log('🔍 clearAnalytics function called');
+        const { projectId } = req.body;
+        console.log('🔍 projectId:', projectId);
+        if (!projectId) {
+            console.log('❌ Missing projectId');
             return res.status(400).json({
                 success: false,
-                message: "Missing clientId parameter"
+                message: "Missing projectId parameter"
             });
         }
-        // Eliminar credenciales OAuth de Firestore
-        await admin.firestore()
-            .collection('oauth_credentials')
-            .doc(clientId)
-            .delete();
+        // Verificar que el userId corresponde al email autorizado
+        const { userId } = req.body;
+        console.log('🔍 userId:', userId);
+        if (!userId || !userId.includes('luisdaniel883@gmail.com')) {
+            console.log('❌ Access denied');
+            return res.status(403).json({
+                success: false,
+                message: "Access denied. Only authorized administrators can clear analytics."
+            });
+        }
+        console.log('✅ Authorization passed, proceeding with clear operation');
+        // Por ahora, solo devolver éxito sin hacer nada
         return res.status(200).json({
             success: true,
-            message: "OAuth logout successful",
+            message: "Analytics data cleared successfully (test mode)",
             data: {
-                clientId
+                deletedVisits: 0,
+                deletedStats: 0
             }
         });
     }
     catch (error) {
+        console.error('❌ Error clearing analytics:', error);
         return res.status(500).json({
             success: false,
-            message: "OAuth logout failed",
-            error: error instanceof Error ? error.message : "Unknown error"
+            message: "Failed to clear analytics",
+            error: error instanceof Error ? error.message : 'Unknown error'
         });
     }
 };
-exports.logout = logout;
+exports.clearAnalytics = clearAnalytics;

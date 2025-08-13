@@ -1,103 +1,64 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 
 interface AnalyticsData {
-  period: string;
-  summary: {
-    totalVisits: number;
-    totalUniqueVisitors: number;
-    totalSubmissions: number;
-    conversionRate: number;
-    avgTimeOnPage: number;
-    avgScrollDepth: number;
-    visitsGrowth: number;
-  };
-  dailyStats: Array<{
-    date: string;
-    visits: number;
-    uniqueVisitors: number;
-    avgTimeOnPage: number;
-    avgScrollDepth: number;
+  totalVisits: number;
+  totalSubmissions: number;
+  conversionRate: number;
+  recentActivity: Array<{
+    timestamp: string;
+    action: string;
+    details: string;
   }>;
-  topReferrers: Array<{
-    referrer: string;
-    count: number;
-  }>;
-  devices: Record<string, number>;
 }
 
-interface AnalyticsDashboardProps {
-  projectId: string;
-}
-
-export default function AnalyticsDashboard({ projectId }: AnalyticsDashboardProps) {
-  const [analyticsData, setAnalyticsData] = useState<AnalyticsData | null>(null);
-  const [period, setPeriod] = useState('7d');
+export default function AnalyticsDashboard() {
+  const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const loadAnalytics = async () => {
-    setIsLoading(true);
-    setError('');
-
-    try {
-      // Usar URL del dominio principal para analytics
-      const response = await fetch('https://uaylabs.web.app/onboardingaudit/api/admin/analytics', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          projectId,
-          period,
-          userId: 'luisdaniel883@gmail.com_onboardingaudit'
-        })
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setAnalyticsData(data.data);
-      } else {
-        setError('Error loading analytics data.');
-      }
-    } catch (error) {
-      setError('Failed to load analytics.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // Memoized base URL
+  const baseUrl = useMemo(() => 'https://api-fu54nvsqfa-uc.a.run.app/api', []);
 
   useEffect(() => {
-    loadAnalytics();
-  }, [period, projectId]);
+    const fetchAnalytics = async () => {
+      try {
+        const response = await fetch(`${baseUrl}/admin/analytics`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            projectId: 'onboardingaudit',
+            userId: 'luisdaniel883@gmail.com_onboardingaudit'
+          })
+        });
 
-  const formatNumber = (num: number) => {
-    return new Intl.NumberFormat().format(num);
-  };
+        if (response.ok) {
+          const data = await response.json();
+          setAnalytics(data);
+        } else {
+          setError('Failed to load analytics data');
+        }
+      } catch (error) {
+        setError('Error loading analytics');
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-  const formatPercentage = (num: number) => {
-    return `${num.toFixed(1)}%`;
-  };
-
-  const formatTime = (seconds: number) => {
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
-  };
-
-  const getGrowthColor = (growth: number) => {
-    return growth >= 0 ? 'text-green-400' : 'text-red-400';
-  };
-
-  const getGrowthIcon = (growth: number) => {
-    return growth >= 0 ? '↗' : '↘';
-  };
+    fetchAnalytics();
+  }, [baseUrl]);
 
   if (isLoading) {
     return (
-      <div className="card">
-        <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
-          <span className="ml-3 text-white">Loading analytics...</span>
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <div className="animate-pulse">
+          <div className="h-4 bg-gray-200 rounded w-1/4 mb-4"></div>
+          <div className="space-y-3">
+            <div className="h-4 bg-gray-200 rounded"></div>
+            <div className="h-4 bg-gray-200 rounded w-5/6"></div>
+            <div className="h-4 bg-gray-200 rounded w-4/6"></div>
+          </div>
         </div>
       </div>
     );
@@ -105,178 +66,77 @@ export default function AnalyticsDashboard({ projectId }: AnalyticsDashboardProp
 
   if (error) {
     return (
-      <div className="card">
-        <div className="text-center py-8">
-          <p className="text-red-200 mb-4">{error}</p>
-          <button
-            onClick={loadAnalytics}
-            className="btn-secondary"
-          >
-            Retry
-          </button>
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <div className="text-center">
+          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+            </svg>
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">Analytics Error</h3>
+          <p className="text-gray-600">{error}</p>
         </div>
       </div>
     );
   }
 
-  if (!analyticsData) {
+  if (!analytics) {
     return (
-      <div className="card">
-        <div className="text-center py-8">
-          <p className="text-gray-300">No analytics data available</p>
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <div className="text-center">
+          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">No Analytics Data</h3>
+          <p className="text-gray-600">Analytics data will appear here once available</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header con selector de período */}
-      <div className="flex justify-between items-center">
-        <h2 className="text-xl font-semibold text-white">Analytics Dashboard</h2>
-        <div className="flex space-x-2">
-          {['1d', '7d', '30d'].map((p) => (
-            <button
-              key={p}
-              onClick={() => setPeriod(p)}
-              className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
-                period === p
-                  ? 'bg-primary-600 text-white'
-                  : 'bg-white/10 text-gray-300 hover:bg-white/20'
-              }`}
-            >
-              {p === '1d' ? 'Today' : p === '7d' ? '7 Days' : '30 Days'}
-            </button>
-          ))}
+    <div className="bg-white rounded-lg shadow-md p-6 mb-8">
+      <h2 className="text-xl font-semibold text-gray-900 mb-6">Analytics Overview</h2>
+      
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="text-center">
+          <div className="text-3xl font-bold text-blue-600 mb-2">{analytics.totalVisits}</div>
+          <div className="text-sm text-gray-600">Total Visits</div>
+        </div>
+        <div className="text-center">
+          <div className="text-3xl font-bold text-green-600 mb-2">{analytics.totalSubmissions}</div>
+          <div className="text-sm text-gray-600">Total Submissions</div>
+        </div>
+        <div className="text-center">
+          <div className="text-3xl font-bold text-purple-600 mb-2">{analytics.conversionRate}%</div>
+          <div className="text-sm text-gray-600">Conversion Rate</div>
         </div>
       </div>
 
-      {/* Métricas principales */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="card text-center">
-          <div className="text-2xl font-bold text-white">
-            {formatNumber(analyticsData.summary.totalVisits)}
-          </div>
-          <div className="text-sm text-gray-300">Total Visits</div>
-          <div className={`text-xs mt-1 ${getGrowthColor(analyticsData.summary.visitsGrowth)}`}>
-            {getGrowthIcon(analyticsData.summary.visitsGrowth)} {formatPercentage(analyticsData.summary.visitsGrowth)}
-          </div>
-        </div>
-
-        <div className="card text-center">
-          <div className="text-2xl font-bold text-white">
-            {formatNumber(analyticsData.summary.totalUniqueVisitors)}
-          </div>
-          <div className="text-sm text-gray-300">Unique Visitors</div>
-        </div>
-
-        <div className="card text-center">
-          <div className="text-2xl font-bold text-white">
-            {formatNumber(analyticsData.summary.totalSubmissions)}
-          </div>
-          <div className="text-sm text-gray-300">Submissions</div>
-        </div>
-
-        <div className="card text-center">
-          <div className="text-2xl font-bold text-white">
-            {formatPercentage(analyticsData.summary.conversionRate)}
-          </div>
-          <div className="text-sm text-gray-300">Conversion Rate</div>
-        </div>
-      </div>
-
-      {/* Métricas de engagement */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="card">
-          <h3 className="text-lg font-semibold text-white mb-4">Engagement Metrics</h3>
-          <div className="space-y-3">
-            <div className="flex justify-between">
-              <span className="text-gray-300">Avg. Time on Page</span>
-              <span className="text-white font-medium">
-                {formatTime(analyticsData.summary.avgTimeOnPage)}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-300">Avg. Scroll Depth</span>
-              <span className="text-white font-medium">
-                {formatPercentage(analyticsData.summary.avgScrollDepth)}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <div className="card">
-          <h3 className="text-lg font-semibold text-white mb-4">Top Referrers</h3>
-          <div className="space-y-2">
-            {analyticsData.topReferrers.map((referrer, index) => (
-              <div key={index} className="flex justify-between items-center">
-                <span className="text-gray-300 text-sm truncate flex-1">
-                  {referrer.referrer === 'direct' ? 'Direct Traffic' : referrer.referrer}
-                </span>
-                <span className="text-white font-medium ml-2">
-                  {formatNumber(referrer.count)}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Dispositivos */}
-      <div className="card">
-        <h3 className="text-lg font-semibold text-white mb-4">Device Distribution</h3>
-        <div className="grid grid-cols-3 gap-4">
-          {Object.entries(analyticsData.devices).map(([device, count]) => (
-            <div key={device} className="text-center">
-              <div className="text-lg font-bold text-white">
-                {formatNumber(count)}
-              </div>
-              <div className="text-sm text-gray-300 capitalize">
-                {device}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Gráfico de visitas diarias */}
-      <div className="card">
-        <h3 className="text-lg font-semibold text-white mb-4">Daily Visits</h3>
-        <div className="space-y-2">
-          {analyticsData.dailyStats.map((day, index) => (
-            <div key={index} className="flex items-center space-x-4">
-              <div className="w-20 text-sm text-gray-300">
-                {new Date(day.date).toLocaleDateString('en-US', { 
-                  month: 'short', 
-                  day: 'numeric' 
-                })}
-              </div>
-              <div className="flex-1">
-                <div className="bg-gray-700 rounded-full h-2">
-                  <div 
-                    className="bg-primary-500 h-2 rounded-full transition-all duration-300"
-                    style={{ 
-                      width: `${Math.min((day.visits / Math.max(...analyticsData.dailyStats.map(d => d.visits))) * 100, 100)}%` 
-                    }}
-                  ></div>
+      <div>
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Activity</h3>
+        <div className="space-y-3">
+          {analytics.recentActivity && analytics.recentActivity.length > 0 ? (
+            analytics.recentActivity.map((activity, index) => (
+              <div key={index} className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
+                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                <div className="flex-1">
+                  <div className="text-sm font-medium text-gray-900">{activity.action}</div>
+                  <div className="text-xs text-gray-500">{activity.details}</div>
+                </div>
+                <div className="text-xs text-gray-400">
+                  {new Date(activity.timestamp).toLocaleDateString()}
                 </div>
               </div>
-              <div className="w-16 text-right text-sm text-white font-medium">
-                {formatNumber(day.visits)}
-              </div>
+            ))
+          ) : (
+            <div className="text-center py-4 text-gray-500">
+              No recent activity available
             </div>
-          ))}
+          )}
         </div>
-      </div>
-
-      {/* Botón de refresh */}
-      <div className="text-center">
-        <button
-          onClick={loadAnalytics}
-          className="btn-secondary"
-        >
-          Refresh Analytics
-        </button>
       </div>
     </div>
   );

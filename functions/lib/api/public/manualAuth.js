@@ -5,48 +5,44 @@ exports.manualAuth = void 0;
 const setupManualAuth_1 = require("../../oauth/setupManualAuth");
 const manualAuth = async (req, res) => {
     try {
-        const { action, code } = req.body;
-        if (!action) {
-            return res.status(400).json({
-                success: false,
-                message: "Missing required parameter: action"
-            });
-        }
-        let result;
+        const { action, code, project_id, email } = req.body;
         switch (action) {
             case 'setup':
-                result = await (0, setupManualAuth_1.setupManualAuth)();
-                break;
-            case 'complete':
-                if (!code) {
+                if (!project_id) {
                     return res.status(400).json({
                         success: false,
-                        message: "Missing required parameter: code"
+                        message: "Missing project_id parameter"
                     });
                 }
-                result = await (0, setupManualAuth_1.setupManualAuthWithCode)(code);
-                break;
+                return await (0, setupManualAuth_1.setupManualAuth)(req, res);
+            case 'setupWithCode':
+                if (!code || !project_id || !email) {
+                    return res.status(400).json({
+                        success: false,
+                        message: "Missing required parameters for setup with code"
+                    });
+                }
+                return await (0, setupManualAuth_1.setupManualAuthWithCode)(req, res);
             case 'test':
-                result = await (0, setupManualAuth_1.testManualAuth)();
-                break;
+                if (!project_id || !email) {
+                    return res.status(400).json({
+                        success: false,
+                        message: "Missing required parameters for test"
+                    });
+                }
+                return await (0, setupManualAuth_1.testManualAuth)(req, res);
             default:
                 return res.status(400).json({
                     success: false,
-                    message: "Invalid action. Must be 'setup', 'complete', or 'test'"
+                    message: "Invalid action. Use 'setup', 'setupWithCode', or 'test'"
                 });
         }
-        return res.status(200).json({
-            success: result.success,
-            message: result.message,
-            data: result
-        });
     }
     catch (error) {
-        console.error('❌ Error in manualAuth:', error);
         return res.status(500).json({
             success: false,
-            message: "Internal server error",
-            error: error instanceof Error ? error.message : 'Unknown error'
+            message: "Manual auth operation failed",
+            error: error instanceof Error ? error.message : "Unknown error"
         });
     }
 };

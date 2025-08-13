@@ -1,109 +1,137 @@
 "use strict";
 // functions/src/api/admin/updateStatus.ts
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updateSubmissionStatus = void 0;
-const getOAuthCredentials_1 = require("../../oauth/getOAuthCredentials");
-const GoogleDriveProvider_1 = require("../../storage/providers/GoogleDriveProvider");
-const updateSubmissionStatus = async (req, res) => {
+exports.updateStatus = void 0;
+const admin = __importStar(require("firebase-admin"));
+const providerFactory_1 = require("../../storage/utils/providerFactory");
+const updateStatus = async (req, res) => {
     try {
-        const { projectId, userId, submissionId, newStatus } = req.body;
-        if (!projectId || !userId || !submissionId || !newStatus) {
+        const { submissionId, newStatus, projectId } = req.body;
+        if (!submissionId || !newStatus || !projectId) {
             return res.status(400).json({
                 success: false,
-                message: "Missing required parameters: projectId, userId, submissionId, newStatus"
+                message: "Missing required parameters: submissionId, newStatus, projectId"
             });
         }
-        // Verificar que el userId corresponde al email autorizado
-        if (!userId.includes('luisdaniel883@gmail.com')) {
-            return res.status(403).json({
-                success: false,
-                message: "Access denied. Only authorized administrators can update submission status."
-            });
-        }
-        // Verificar credenciales OAuth
-        const credentials = await (0, getOAuthCredentials_1.getOAuthCredentials)(userId);
-        if (!credentials) {
-            return res.status(401).json({
-                success: false,
-                message: "Not authenticated. Please login first."
-            });
-        }
-        // Validar estado válido
-        const validStatuses = ['pending', 'in_progress', 'completed'];
-        if (!validStatuses.includes(newStatus)) {
+        // Validar status permitidos
+        const allowedStatuses = ['pending', 'processing', 'completed', 'error', 'cancelled'];
+        if (!allowedStatuses.includes(newStatus)) {
             return res.status(400).json({
                 success: false,
-                message: "Invalid status. Must be one of: pending, in_progress, completed"
+                message: "Invalid status. Allowed values: pending, processing, completed, error, cancelled"
             });
         }
-        // Obtener submissions desde Google Drive
-        const provider = new GoogleDriveProvider_1.GoogleDriveProvider();
-        // Crear carpeta principal del admin (si no existe)
-        const adminFolderId = await provider.createFolderWithTokens('luisdaniel883@gmail.com', projectId, credentials.accessToken, credentials.refreshToken);
-        // Listar TODAS las subcarpetas en la carpeta del admin
-        const allFiles = [];
-        // Primero, listar las subcarpetas (folders)
-        const folders = await provider.listFilesWithTokens(adminFolderId, credentials.accessToken, credentials.refreshToken);
-        // Buscar archivos .md en cada subcarpeta
-        for (const folder of folders) {
-            if (folder.mimeType === 'application/vnd.google-apps.folder') {
-                const subfolderFiles = await provider.listFilesWithTokens(folder.id, credentials.accessToken, credentials.refreshToken);
-                // Agregar archivos .md encontrados
-                const mdFiles = subfolderFiles.filter(file => file.name.includes('Onboarding_Audit_') &&
-                    file.mimeType === 'text/markdown');
-                allFiles.push(...mdFiles);
-            }
-        }
-        // Encontrar el archivo específico
-        const targetFile = allFiles.find(file => file.id === submissionId);
-        if (!targetFile) {
+        // Obtener la submission
+        const submissionRef = admin.firestore().collection('submissions').doc(submissionId);
+        const submissionDoc = await submissionRef.get();
+        if (!submissionDoc.exists) {
             return res.status(404).json({
                 success: false,
                 message: "Submission not found"
             });
         }
-        // Crear un archivo de estado en la misma carpeta
-        const statusFileName = `status_${newStatus}_${new Date().toISOString().slice(0, 10)}.txt`;
-        const statusContent = `Status: ${newStatus}\nUpdated: ${new Date().toISOString()}\nUpdatedBy: ${userId}`;
-        const statusBuffer = Buffer.from(statusContent, 'utf-8');
-        try {
-            await provider.uploadFileWithTokens({
-                folderId: targetFile.parents?.[0] || adminFolderId,
-                filename: statusFileName,
-                contentBuffer: statusBuffer,
-                mimeType: 'text/plain',
-                accessToken: credentials.accessToken,
-                refreshToken: credentials.refreshToken
+        const submission = submissionDoc.data();
+        // Si el nuevo status es 'completed', procesar archivos
+        if (newStatus === 'completed' && submission?.files && submission.files.length > 0) {
+            try {
+                const provider = providerFactory_1.StorageProviderFactory.createProvider('google');
+                // Crear carpeta si no existe
+                let folderId = submission.folderId;
+                if (!folderId) {
+                    folderId = await provider.createFolder(submission.userEmail, projectId);
+                }
+                // Subir archivos usando la interfaz estándar
+                for (const file of submission.files) {
+                    try {
+                        await provider.uploadFile({
+                            folderId,
+                            filename: file.filename,
+                            contentBuffer: Buffer.from(file.content, 'base64'),
+                            mimeType: file.mimeType
+                        });
+                    }
+                    catch (fileError) {
+                        console.error(`❌ Error uploading file ${file.filename}:`, fileError);
+                    }
+                }
+                // Actualizar con folderId
+                await submissionRef.update({
+                    status: newStatus,
+                    folderId,
+                    updatedAt: admin.firestore.Timestamp.now()
+                });
+            }
+            catch (error) {
+                console.error('❌ Error processing files:', error);
+                // Marcar como error si falla el procesamiento
+                await submissionRef.update({
+                    status: 'error',
+                    errorMessage: 'Failed to process files',
+                    updatedAt: admin.firestore.Timestamp.now()
+                });
+                return res.status(500).json({
+                    success: false,
+                    message: "Failed to process files",
+                    error: error instanceof Error ? error.message : "Unknown error"
+                });
+            }
+        }
+        else {
+            // Actualizar status sin procesar archivos
+            await submissionRef.update({
+                status: newStatus,
+                updatedAt: admin.firestore.Timestamp.now()
             });
-            console.log('✅ Submission status updated:', {
+        }
+        return res.status(200).json({
+            success: true,
+            message: "Status updated successfully",
+            data: {
                 submissionId,
                 newStatus,
-                projectId,
-                userId
-            });
-            return res.status(200).json({
-                success: true,
-                message: `Submission status updated to ${newStatus}`,
-                submissionId,
-                newStatus
-            });
-        }
-        catch (error) {
-            console.error('❌ Error updating submission status:', error);
-            return res.status(500).json({
-                success: false,
-                message: "Failed to update submission status",
-                error: error instanceof Error ? error.message : 'Unknown error'
-            });
-        }
+                updatedAt: new Date().toISOString()
+            }
+        });
     }
     catch (error) {
-        console.error('❌ Error in updateSubmissionStatus:', error);
         return res.status(500).json({
             success: false,
-            message: "Failed to update submission status",
-            error: error instanceof Error ? error.message : 'Unknown error'
+            message: "Failed to update status",
+            error: error instanceof Error ? error.message : "Unknown error"
         });
     }
 };
-exports.updateSubmissionStatus = updateSubmissionStatus;
+exports.updateStatus = updateStatus;

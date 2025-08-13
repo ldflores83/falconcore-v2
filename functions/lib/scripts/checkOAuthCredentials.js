@@ -1,45 +1,61 @@
 "use strict";
 // functions/src/scripts/checkOAuthCredentials.ts
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.checkAdminCredentials = void 0;
+exports.checkOAuthCredentials = void 0;
 const getOAuthCredentials_1 = require("../oauth/getOAuthCredentials");
-const checkAdminCredentials = async () => {
-    console.log('🔍 Checking admin OAuth credentials...');
-    const adminEmail = 'luisdaniel883@gmail.com';
-    const adminUserId = `${adminEmail}_onboardingaudit`;
-    console.log('🔍 Looking for credentials with userId:', adminUserId);
+const checkOAuthCredentials = async (clientId) => {
     try {
-        const credentials = await (0, getOAuthCredentials_1.getOAuthCredentials)(adminUserId);
-        if (credentials) {
-            console.log('✅ Admin credentials found:', {
-                hasAccessToken: !!credentials.accessToken,
-                hasRefreshToken: !!credentials.refreshToken,
-                accessTokenLength: credentials.accessToken?.length || 0,
-                expiryDate: credentials.expiryDate ? new Date(credentials.expiryDate).toISOString() : 'No expiry',
-                isExpired: credentials.expiryDate ? Date.now() > credentials.expiryDate : false,
-                createdAt: credentials.createdAt,
-                updatedAt: credentials.updatedAt
-            });
+        const credentials = await (0, getOAuthCredentials_1.getOAuthCredentials)(clientId);
+        if (!credentials) {
+            console.log('❌ No OAuth credentials found for:', clientId);
+            return {
+                success: false,
+                message: 'No OAuth credentials found'
+            };
         }
-        else {
-            console.log('❌ No admin credentials found for:', adminUserId);
-            console.log('💡 You need to setup OAuth for the admin user first.');
-        }
+        const credentialInfo = {
+            clientId: credentials.clientId,
+            projectId: credentials.projectId,
+            email: credentials.email,
+            hasAccessToken: !!credentials.accessToken,
+            hasRefreshToken: !!credentials.refreshToken,
+            expiresAt: credentials.expiresAt ? new Date(credentials.expiresAt).toISOString() : 'No expiry',
+            isExpired: credentials.expiresAt ? Date.now() > credentials.expiresAt : false,
+            folderId: credentials.folderId
+        };
+        console.log('✅ OAuth credentials found:', credentialInfo);
+        return {
+            success: true,
+            message: 'OAuth credentials found',
+            data: credentialInfo
+        };
     }
     catch (error) {
-        console.error('❌ Error checking credentials:', error);
+        console.error('❌ Error checking OAuth credentials:', error);
+        return {
+            success: false,
+            message: 'Error checking OAuth credentials',
+            error: error instanceof Error ? error.message : 'Unknown error'
+        };
     }
 };
-exports.checkAdminCredentials = checkAdminCredentials;
+exports.checkOAuthCredentials = checkOAuthCredentials;
 // Ejecutar si se llama directamente
 if (require.main === module) {
-    checkAdminCredentials()
-        .then(() => {
-        console.log('✅ Check completed');
-        process.exit(0);
-    })
-        .catch((error) => {
-        console.error('❌ Check failed:', error);
-        process.exit(1);
-    });
+    // This part of the script is no longer relevant for the new checkOAuthCredentials function
+    // as it expects a clientId directly.
+    // If you need to check a specific admin user, you would call checkOAuthCredentials with their clientId.
+    // For example:
+    // checkOAuthCredentials('generated_client_id_hash')
+    //   .then(result => {
+    //     console.log('✅ Check completed:', result);
+    //     process.exit(0);
+    //   })
+    //   .catch(error => {
+    //     console.error('❌ Check failed:', error);
+    //     process.exit(1);
+    //   });
+    console.log('This script is now primarily for checking specific user credentials.');
+    console.log('To check admin credentials, you would call checkOAuthCredentials with their clientId.');
+    process.exit(0);
 }

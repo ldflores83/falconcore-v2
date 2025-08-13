@@ -1,8 +1,6 @@
 // /functions/src/api/public/receiveForm.ts
 
 import { Request, Response } from "express";
-import { GoogleDriveProvider } from "../../storage/providers/GoogleDriveProvider";
-import { getOAuthCredentials } from "../../oauth/getOAuthCredentials";
 import { uploadToStorage } from "../../services/storage";
 import * as admin from 'firebase-admin';
 
@@ -90,52 +88,6 @@ export const receiveForm = async (req: Request, res: Response) => {
     const projectIdFinal = projectId || 'onboardingaudit';
     const clientIdFinal = clientId || formData.email.split('@')[0];
 
-    // Verificar si el usuario ya tiene una submission pendiente
-    const adminUserId = `luisdaniel883@gmail.com_${projectIdFinal}`;
-    const credentials = await getOAuthCredentials(adminUserId);
-    
-    if (credentials) {
-      const provider = new GoogleDriveProvider();
-      const adminFolderId = await provider.createFolderWithTokens(
-        'luisdaniel883@gmail.com', 
-        projectIdFinal, 
-        credentials.accessToken,
-        credentials.refreshToken
-      );
-      
-      // Listar todas las subcarpetas para verificar submissions existentes
-      const folders = await provider.listFilesWithTokens(
-        adminFolderId, 
-        credentials.accessToken,
-        credentials.refreshToken
-      );
-      
-      // Verificar si ya existe una submission de este email
-      const existingSubmission = folders.find(folder => 
-        folder.mimeType === 'application/vnd.google-apps.folder' && 
-        folder.name.includes(formData.email)
-      );
-      
-                if (existingSubmission) {
-            return res.status(400).json({
-              success: false,
-              message: "You already have a pending request. Please wait for it to be completed before submitting another."
-            });
-          }
-
-      // Verificar límite de submissions pendientes (máximo 6)
-      const pendingSubmissions = folders.filter(folder => 
-        folder.mimeType === 'application/vnd.google-apps.folder'
-      );
-      
-                if (pendingSubmissions.length >= 6) {
-            return res.status(400).json({
-              success: false,
-              message: "We are currently working on pending requests. Please try again later when more slots become available."
-            });
-          }
-    }
-
     console.log('📝 Form submission received:', {
       submissionId,
       email: formData.email,
@@ -145,7 +97,7 @@ export const receiveForm = async (req: Request, res: Response) => {
       timestamp: new Date().toISOString(),
     });
 
-    // Guardar en Firestore primero (sin depender de OAuth)
+    // Guardar en Firestore (sin depender de OAuth)
     console.log('💾 Saving submission to Firestore...');
     const db = getFirestore();
     

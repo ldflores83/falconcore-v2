@@ -25,5 +25,9 @@ class DropboxProvider {
         // TODO: Implementar cuando se necesite Dropbox
         throw new Error("Dropbox provider not implemented yet");
     }
+    async findOrCreateFolder(folderName, projectId, accessToken, refreshToken) {
+        // Para Dropbox, simplemente crear la carpeta (no hay búsqueda eficiente)
+        return this.createFolderWithTokens('dropbox_user', projectId, accessToken, refreshToken);
+    }
 }
 exports.DropboxProvider = DropboxProvider;

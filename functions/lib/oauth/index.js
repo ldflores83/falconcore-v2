@@ -3,33 +3,35 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const login_1 = require("./login");
+const callback_1 = require("./callback");
 const check_1 = require("./check");
 const logout_1 = require("./logout");
 const router = (0, express_1.Router)();
-// Middleware para debug
+// Middleware para logging de requests OAuth
 router.use((req, res, next) => {
-    console.log('🔧 OAuth router middleware - Request:', {
-        path: req.path,
+    console.log('🔐 OAuth Router: Request received:', {
         method: req.method,
+        path: req.path,
         url: req.url,
-        baseUrl: req.baseUrl,
-        originalUrl: req.originalUrl
+        query: req.query
     });
     next();
 });
-console.log('🔧 OAuth router: registering /login endpoint');
+// Rutas OAuth
 router.get('/login', (req, res) => {
-    console.log('🔧 OAuth /login endpoint called');
-    console.log('🔧 Request path:', req.path);
-    console.log('🔧 Request method:', req.method);
-    console.log('🔧 Request url:', req.url);
-    console.log('🔧 Request baseUrl:', req.baseUrl);
-    console.log('🔧 Request originalUrl:', req.originalUrl);
-    console.log('🔧 OAuth router - About to call login function');
+    console.log('🔐 OAuth Router: /login route called');
     return (0, login_1.login)(req, res);
 });
-// Callback se maneja directamente en app.ts para evitar conflictos
-// router.get('/callback', callback); // REMOVIDO - se maneja en app.ts
-router.post('/check', check_1.check);
-router.post('/logout', logout_1.logout);
+router.get('/callback', (req, res) => {
+    console.log('🔐 OAuth Router: /callback route called');
+    return (0, callback_1.callback)(req, res);
+});
+router.get('/check', (req, res) => {
+    console.log('🔐 OAuth Router: /check route called');
+    return (0, check_1.check)(req, res);
+});
+router.post('/logout', (req, res) => {
+    console.log('🔐 OAuth Router: /logout route called');
+    return (0, logout_1.logout)(req, res);
+});
 exports.default = router;

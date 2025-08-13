@@ -12,11 +12,24 @@ export default function AdminLogin() {
     setError('');
 
     try {
-      // Redirigir a OAuth con projectId específico para onboardingaudit
-      // Usar URL directa de la función api (solución temporal mientras se arregla el rewrite)
+      // Obtener la URL de OAuth del backend
       const timestamp = Date.now();
-      const oauthUrl = `https://uaylabs.web.app/onboardingaudit/api/oauth/login?project_id=onboardingaudit&t=${timestamp}`;
-      window.location.href = oauthUrl;
+      const response = await fetch(`https://api-fu54nvsqfa-uc.a.run.app/oauth/login?project_id=onboardingaudit&t=${timestamp}`);
+      
+      if (response.ok) {
+        const data = await response.json();
+        
+        if (data.success && data.data?.authUrl) {
+          // Redirigir automáticamente a la URL de Google OAuth
+          window.location.href = data.data.authUrl;
+        } else {
+          setError('Failed to get OAuth URL');
+          setIsLoading(false);
+        }
+      } else {
+        setError('Failed to start OAuth process');
+        setIsLoading(false);
+      }
     } catch (error) {
       setError('Error starting authentication. Please try again.');
       setIsLoading(false);
@@ -28,14 +41,14 @@ export default function AdminLogin() {
     const checkAuth = async () => {
       try {
         // Usar URL directa de la función api para auth check
-        const response = await fetch('https://uaylabs.web.app/onboardingaudit/api/auth/check', {
+        const response = await fetch('https://api-fu54nvsqfa-uc.a.run.app/api/auth/check', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
             projectId: 'onboardingaudit',
-            userId: 'luisdaniel883@gmail.com_onboardingaudit'
+            clientId: 'e34cada489125b06714195f25d820e3da84333c4166548bba77e1952e05a6912'
           })
         });
 
@@ -47,7 +60,7 @@ export default function AdminLogin() {
           }
         }
       } catch (error) {
-        console.log('No autenticado');
+        // Silent fail for auth check
       }
     };
 

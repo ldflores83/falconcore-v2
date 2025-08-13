@@ -110,7 +110,15 @@ const uploadAsset = async (req, res) => {
             const filePaths = [];
             const db = getFirestore();
             for (const file of files) {
+                console.log('🔍 Processing file:', {
+                    filename: file.filename,
+                    contentType: typeof file.content,
+                    contentLength: file.content?.length || 0,
+                    size: file.size,
+                    mimeType: file.mimeType
+                });
                 // Decodificar contenido Base64
+                // El frontend envía content como string directo, no como objeto
                 const contentBuffer = Buffer.from(file.content, 'base64');
                 // Generar ruta única para el archivo en Cloud Storage
                 const filePath = `submissions/${submissionId}/attachments/${Date.now()}_${file.filename}`;

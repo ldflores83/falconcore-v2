@@ -1,11 +1,10 @@
 // functions/src/api/admin/submissions.ts
 
-import { Request, Response } from "express";
+import { Request, Response } from 'express';
 import { getOAuthCredentials } from '../../oauth/getOAuthCredentials';
-import { GoogleDriveProvider } from '../../storage/providers/GoogleDriveProvider';
+import { generateClientId } from '../../utils/hash';
 import * as admin from 'firebase-admin';
 
-// Función para obtener Firestore de forma lazy
 const getFirestore = () => {
   if (!admin.apps.length) {
     admin.initializeApp({
@@ -17,17 +16,18 @@ const getFirestore = () => {
 
 export const getSubmissions = async (req: Request, res: Response) => {
   try {
-    const { projectId, userId } = req.body;
+    const { projectId, clientId } = req.body;
 
-    if (!projectId || !userId) {
+    if (!projectId || !clientId) {
       return res.status(400).json({
         success: false,
-        message: "Missing required parameters: projectId and userId"
+        message: "Missing required parameters: projectId and clientId"
       });
     }
 
-    // Verificar que el userId corresponde al email autorizado
-    if (!userId.includes('luisdaniel883@gmail.com')) {
+    // Verificar que el clientId corresponde al email autorizado
+    const expectedClientId = generateClientId('luisdaniel883@gmail.com', projectId);
+    if (clientId !== expectedClientId) {
       return res.status(403).json({
         success: false,
         message: "Access denied. Only authorized administrators can access submissions."
@@ -35,7 +35,7 @@ export const getSubmissions = async (req: Request, res: Response) => {
     }
 
     // Verificar credenciales OAuth
-    const credentials = await getOAuthCredentials(userId);
+    const credentials = await getOAuthCredentials(clientId);
     
     if (!credentials) {
       return res.status(401).json({
@@ -71,7 +71,7 @@ export const getSubmissions = async (req: Request, res: Response) => {
     
     console.log('📁 Submissions loaded from Firestore:', {
       projectId,
-      userId,
+      clientId,
       submissionsCount: submissions.length,
       submissions: submissions.map(s => ({ id: s.id, email: s.email, status: s.status }))
     });
@@ -85,7 +85,7 @@ export const getSubmissions = async (req: Request, res: Response) => {
     
     console.log('✅ Admin submissions loaded with pending count:', {
       projectId,
-      userId,
+      clientId,
       submissionsCount: submissions.length,
       pendingCount
     });

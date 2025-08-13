@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getUserInfoFromToken = exports.exchangeCodeForTokens = exports.getOAuthClient = exports.OAUTH_SCOPES = void 0;
+exports.getUserInfoFromToken = exports.exchangeCodeForTokens = exports.getOAuthClient = exports.OAUTH_SCOPES = exports.getOAuthConfig = void 0;
 const googleapis_1 = require("googleapis");
 const secretManager_1 = require("../services/secretManager");
 /**
@@ -34,34 +34,32 @@ const getOAuthConfig = async (projectId) => {
         };
     }
 };
+exports.getOAuthConfig = getOAuthConfig;
 // 📤 Scopes que solicitamos al usuario al hacer login
 exports.OAUTH_SCOPES = [
-    'https://www.googleapis.com/auth/drive.file',
-    'https://www.googleapis.com/auth/userinfo.email',
-    'https://www.googleapis.com/auth/userinfo.profile'
+    'https://www.googleapis.com/auth/drive.file', // Solo archivos creados por la app
+    'https://www.googleapis.com/auth/userinfo.email' // Solo para obtener el email
 ];
-// 🔄 Devuelve un cliente OAuth configurado para el producto correspondiente
-const getOAuthClient = async (projectId) => {
-    const config = await getOAuthConfig(projectId);
-    if (!config) {
-        throw new Error(`No OAuth config found for project_id: ${projectId}`);
-    }
+// 🔧 Función para crear cliente OAuth2
+const getOAuthClient = (config) => {
     return new googleapis_1.google.auth.OAuth2(config.clientId, config.clientSecret, config.redirectUri);
 };
 exports.getOAuthClient = getOAuthClient;
-// 🔁 Intercambia el código de autorización recibido por los tokens reales
-const exchangeCodeForTokens = async (code, projectId) => {
-    const oauth2Client = await (0, exports.getOAuthClient)(projectId);
-    const { tokens } = await oauth2Client.getToken(code);
-    return tokens;
+// 🔄 Función para intercambiar código por tokens
+const exchangeCodeForTokens = async (oauth2Client, code) => {
+    return await oauth2Client.getToken(code);
 };
 exports.exchangeCodeForTokens = exchangeCodeForTokens;
-// 👤 Usa los tokens para obtener los datos del usuario (email, nombre, etc.)
+// 👤 Función para obtener información del usuario desde el token
 const getUserInfoFromToken = async (tokens) => {
     const oauth2Client = new googleapis_1.google.auth.OAuth2();
     oauth2Client.setCredentials(tokens);
     const oauth2 = googleapis_1.google.oauth2({ version: 'v2', auth: oauth2Client });
     const userInfo = await oauth2.userinfo.get();
-    return userInfo.data;
+    return {
+        email: userInfo.data.email,
+        name: userInfo.data.name,
+        picture: userInfo.data.picture
+    };
 };
 exports.getUserInfoFromToken = getUserInfoFromToken;

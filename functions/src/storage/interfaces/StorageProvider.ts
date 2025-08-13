@@ -18,6 +18,16 @@ export interface StorageProvider {
   createFolderWithTokens(email: string, projectId: string, accessToken: string, refreshToken?: string): Promise<string>;
 
   /**
+   * Busca una carpeta existente o crea una nueva si no existe
+   * @param folderName Nombre de la carpeta a buscar/crear
+   * @param projectId ID del proyecto
+   * @param accessToken Token de acceso OAuth
+   * @param refreshToken Token de refresh OAuth (opcional)
+   * @returns folderId de la carpeta existente o nueva
+   */
+  findOrCreateFolder(folderName: string, projectId: string, accessToken: string, refreshToken?: string, parentFolderId?: string): Promise<string>;
+
+  /**
    * Sube un archivo al proveedor de almacenamiento
    * @param folderId ID de la carpeta donde subir el archivo
    * @param filename Nombre del archivo
@@ -30,6 +40,8 @@ export interface StorageProvider {
     filename: string;
     contentBuffer: Buffer;
     mimeType: string;
+    accessToken?: string;
+    refreshToken?: string;
   }): Promise<{
     id: string;
     name: string;

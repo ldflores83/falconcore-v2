@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { OnboardingAuditForm } from '../types/form';
-import { OnboardingAuditAPI } from '../lib/api';
-import { getAnalytics } from '../lib/analytics';
+import { OnboardingAuditClient } from '../lib/api';
+import { createAnalyticsTracker } from '../lib/analytics';
 
 interface AuditFormProps {
   onSubmit: (success: boolean, message: string) => void;
@@ -50,82 +50,131 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
     errors: []
   });
 
-  const handleInputChange = (field: keyof OnboardingAuditForm, value: any) => {
+  // Memoizar constantes para evitar recálculos
+  const maxFileSize = useMemo(() => 10 * 1024 * 1024, []); // 10MB
+  const maxIndividualSize = useMemo(() => 10 * 1024 * 1024, []); // 10MB por archivo
+
+  // Optimizar handlers con useCallback
+  const handleInputChange = useCallback((field: keyof OnboardingAuditForm, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
-  };
+  }, []);
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
-    const newFilesSize = files.reduce((total, file) => total + file.size, 0);
-    const maxSize = 10 * 1024 * 1024; // 10MB in bytes
+    console.log('🔍 File upload triggered:', files.length, 'files selected');
+    console.log('🔍 Files:', files.map(f => ({ name: f.name, size: f.size, type: f.type })));
     
-    if (totalFileSize + newFilesSize > maxSize) {
-      alert('Total file size exceeds 10MB limit. Please select smaller files or fewer files.');
-      return;
-    }
-    
-    setUploadedFiles(prev => [...prev, ...files]);
-    setTotalFileSize(prev => prev + newFilesSize);
-  };
-
-  const handleRemoveFile = (index: number) => {
-    const fileToRemove = uploadedFiles[index];
-    setUploadedFiles(prev => prev.filter((_, i) => i !== index));
-    setTotalFileSize(prev => prev - fileToRemove.size);
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-
-    // Validar archivos antes de enviar
-    const maxIndividualSize = 10 * 1024 * 1024; // 10MB por archivo
-    const maxTotalSize = 10 * 1024 * 1024; // 10MB total
-    
-    if (uploadedFiles.length > 0) {
-      // Validar archivos individuales
-      const oversizedFiles = uploadedFiles.filter(file => file.size > maxIndividualSize);
-      if (oversizedFiles.length > 0) {
-        const fileNames = oversizedFiles.map(f => f.name).join(', ');
-        setIsSubmitting(false);
-        onSubmit(false, `File(s) exceed 10MB limit: ${fileNames}. Please compress or split large files.`);
+    const validateFiles = async () => {
+      const newFilesSize = files.reduce((total, file) => total + file.size, 0);
+      console.log('🔍 New files total size:', newFilesSize, 'bytes');
+      console.log('🔍 Current total size:', totalFileSize, 'bytes');
+      console.log('🔍 Max allowed size:', maxFileSize, 'bytes');
+      
+      if (totalFileSize + newFilesSize > maxFileSize) {
+        alert('Total file size exceeds 10MB limit. Please select smaller files or fewer files.');
         return;
       }
       
-      // Validar tamaño total
-      const totalSize = uploadedFiles.reduce((sum, file) => sum + file.size, 0);
-      if (totalSize > maxTotalSize) {
-        const totalMB = Math.round(totalSize / 1024 / 1024 * 100) / 100;
-        setIsSubmitting(false);
-        onSubmit(false, `Total file size (${totalMB}MB) exceeds 10MB limit. Please reduce file sizes or upload fewer files.`);
+      const validationPromises = files.map(async (file) => {
+        try {
+          const validation = await OnboardingAuditClient.validateFile(file);
+          return { file, validation };
+        } catch (error) {
+          return { file, validation: { isValid: false, errors: ['Validation failed'] } };
+        }
+      });
+      
+      const validationResults = await Promise.all(validationPromises);
+      const invalidFiles = validationResults.filter(result => !result.validation.isValid);
+      
+      if (invalidFiles.length > 0) {
+        const errorMessages = invalidFiles.map(result => 
+          `${result.file.name}: ${result.validation.errors.join(', ')}`
+        ).join('\n');
+        alert(`Some files are invalid:\n${errorMessages}`);
         return;
       }
+      
+      console.log('🔍 All files validated successfully, updating state...');
+      setUploadedFiles(prev => {
+        const newFiles = [...prev, ...files];
+        console.log('🔍 Updated uploadedFiles:', newFiles.length, 'total files');
+        return newFiles;
+      });
+      setTotalFileSize(prev => {
+        const newTotal = prev + newFilesSize;
+        console.log('🔍 Updated totalFileSize:', newTotal, 'bytes');
+        return newTotal;
+      });
+    };
+    
+    validateFiles();
+  }, [totalFileSize, maxFileSize]);
+
+  const handleRemoveFile = useCallback((index: number) => {
+    setUploadedFiles(prev => {
+      const fileToRemove = prev[index];
+      setTotalFileSize(current => current - fileToRemove.size);
+      return prev.filter((_, i) => i !== index);
+    });
+  }, []);
+
+  // Memoizar validaciones de archivos con Web Worker
+  const fileValidation = useMemo(() => {
+    if (uploadedFiles.length === 0) return { isValid: true, error: null };
+    
+    const oversizedFiles = uploadedFiles.filter(file => file.size > maxIndividualSize);
+    if (oversizedFiles.length > 0) {
+      const fileNames = oversizedFiles.map(f => f.name).join(', ');
+      return { 
+        isValid: false, 
+        error: `File(s) exceed 10MB limit: ${fileNames}. Please compress or split large files.` 
+      };
+    }
+    
+    const totalSize = uploadedFiles.reduce((sum, file) => sum + file.size, 0);
+    if (totalSize > maxFileSize) {
+      const totalMB = Math.round(totalSize / 1024 / 1024 * 100) / 100;
+      return { 
+        isValid: false, 
+        error: `Total file size (${totalMB}MB) exceeds 10MB limit. Please reduce file sizes or upload fewer files.` 
+      };
+    }
+    
+    return { isValid: true, error: null };
+  }, [uploadedFiles, maxIndividualSize, maxFileSize]);
+
+  const handleSubmit = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    console.log('🔍 Submit triggered');
+    console.log('🔍 Current uploadedFiles state:', uploadedFiles);
+    console.log('🔍 Current totalFileSize state:', totalFileSize);
+    console.log('🔍 File validation result:', fileValidation);
+    
+    setIsSubmitting(true);
+
+    // Usar validación memoizada
+    if (!fileValidation.isValid) {
+      console.log('❌ File validation failed:', fileValidation.error);
+      setIsSubmitting(false);
+      onSubmit(false, fileValidation.error!);
+      return;
     }
 
     try {
-      const response = await OnboardingAuditAPI.submitForm(formData);
-      console.log('🔍 Form submission response:', response);
+      const response = await OnboardingAuditClient.submitForm(formData);
       
       if (response.success && response.submissionId) {
         // Track form submission in analytics
-        const analytics = getAnalytics();
-        if (analytics) {
-          analytics.trackFormSubmission(formData);
-        }
+        const tracker = createAnalyticsTracker('onboardingaudit');
+        tracker.trackPageVisit('form_submission');
 
         // Upload additional files if any
         if (uploadedFiles.length > 0 && response.folderId) {
-          console.log('🔍 Uploading files with:', {
-            submissionId: response.submissionId,
-            folderId: response.folderId,
-            userEmail: formData.email,
-            filesCount: uploadedFiles.length
-          });
-          
           // Inicializar progreso de upload
           setUploadProgress({
             isUploading: true,
-            currentFile: '',
+            currentFile: 'Processing files...',
             currentIndex: 0,
             totalFiles: uploadedFiles.length,
             successfulUploads: 0,
@@ -133,62 +182,133 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
             errors: []
           });
           
-          const uploadResults = [];
-          for (let i = 0; i < uploadedFiles.length; i++) {
-            const file = uploadedFiles[i];
-            
-            // Actualizar progreso actual
+          try {
+            // Actualizar progreso - Compresión
             setUploadProgress(prev => ({
               ...prev,
-              currentFile: file.name,
-              currentIndex: i + 1
+              currentFile: 'Compressing images...',
+              currentIndex: 0
             }));
             
-            try {
-              console.log(`🔍 Uploading file: ${file.name} (${Math.round(file.size / 1024)}KB)`);
-              const uploadResult = await OnboardingAuditAPI.uploadAsset(file, response.submissionId!, response.folderId!, formData.email);
-              uploadResults.push({ file: file.name, success: true, result: uploadResult });
-              console.log(`✅ File uploaded successfully: ${file.name}`);
-              
-              // Actualizar contador de éxitos
+            console.log('🔍 Processing files for upload:', {
+              totalFiles: uploadedFiles.length,
+              fileTypes: uploadedFiles.map(f => ({ name: f.name, type: f.type, size: f.size })),
+              userAgent: navigator.userAgent,
+              isMobile: /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+            });
+            
+            // Procesar compresión de imágenes en paralelo
+            const processedFiles = await Promise.all(
+              uploadedFiles.map(async (file, index) => {
+                // Actualizar progreso de compresión
+                setUploadProgress(prev => ({
+                  ...prev,
+                  currentFile: `Compressing ${file.name}...`,
+                  currentIndex: index + 1
+                }));
+                
+                console.log(`🔍 Processing file ${index + 1}/${uploadedFiles.length}:`, {
+                  filename: file.name,
+                  type: file.type,
+                  size: file.size,
+                  isImage: file.type.startsWith('image/')
+                });
+                
+                if (file.type.startsWith('image/')) {
+                  try {
+                    console.log(`🖼️ Attempting compression for: ${file.name}`);
+                    const compressionResult = await OnboardingAuditClient.compressImage(file);
+                    console.log(`📊 Compression result for ${file.name}:`, {
+                      originalSize: compressionResult.originalSize,
+                      compressedSize: compressionResult.compressedSize,
+                      ratio: compressionResult.compressionRatio
+                    });
+                    
+                    if (compressionResult.compressionRatio !== '0') {
+                      // Usar archivo comprimido si la compresión fue exitosa
+                      const compressedFile = new File([compressionResult.blob], file.name, {
+                        type: 'image/jpeg'
+                      });
+                      console.log(`✅ Using compressed file for ${file.name}:`, {
+                        originalSize: file.size,
+                        compressedSize: compressedFile.size
+                      });
+                      return compressedFile;
+                    }
+                  } catch (error) {
+                    console.warn('⚠️ Image compression failed for', file.name, 'using original file. Error:', error);
+                  }
+                }
+                
+                console.log(`📄 Using original file for ${file.name}`);
+                return file;
+              })
+            );
+            
+            console.log('🔍 Final processed files:', {
+              count: processedFiles.length,
+              files: processedFiles.map(f => ({ name: f.name, type: f.type, size: f.size }))
+            });
+            
+            // Actualizar progreso - Upload
+            setUploadProgress(prev => ({
+              ...prev,
+              currentFile: 'Uploading files to server...',
+              currentIndex: uploadedFiles.length
+            }));
+            
+            // Subir todos los archivos de una vez usando el nuevo método
+            console.log('🚀 Starting upload with OnboardingAuditClient.uploadMultipleAssets:', {
+              submissionId: response.submissionId,
+              folderId: response.folderId,
+              userEmail: formData.email,
+              processedFilesCount: processedFiles.length
+            });
+            
+            const uploadResult = await OnboardingAuditClient.uploadMultipleAssets(
+              processedFiles, 
+              response.submissionId!, 
+              response.folderId!, 
+              formData.email
+            );
+            
+            console.log('📤 Upload result:', uploadResult);
+            
+            if (uploadResult.success) {
               setUploadProgress(prev => ({
                 ...prev,
-                successfulUploads: prev.successfulUploads + 1
+                successfulUploads: uploadedFiles.length,
+                failedUploads: 0,
+                currentFile: 'Upload completed successfully!'
               }));
-            } catch (error) {
-              console.error(`❌ Error uploading file ${file.name}:`, error);
-              const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-              uploadResults.push({ file: file.name, success: false, error: error });
-              
-              // Actualizar contador de errores
+            } else {
               setUploadProgress(prev => ({
                 ...prev,
-                failedUploads: prev.failedUploads + 1,
-                errors: [...prev.errors, `${file.name}: ${errorMessage}`]
+                successfulUploads: 0,
+                failedUploads: uploadedFiles.length,
+                errors: [uploadResult.message || 'Upload failed'],
+                currentFile: 'Upload failed'
               }));
             }
+            
+          } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            setUploadProgress(prev => ({
+              ...prev,
+              successfulUploads: 0,
+              failedUploads: uploadedFiles.length,
+              errors: [errorMessage],
+              currentFile: 'Upload failed'
+            }));
           }
           
-          // Finalizar progreso
-          setUploadProgress(prev => ({
-            ...prev,
-            isUploading: false
-          }));
-          
-          // Log upload summary
-          const successfulUploads = uploadResults.filter(r => r.success).length;
-          const failedUploads = uploadResults.filter(r => !r.success).length;
-          console.log(`📊 Upload summary: ${successfulUploads} successful, ${failedUploads} failed`);
-          
-          if (failedUploads > 0) {
-            console.warn('⚠️ Some files failed to upload:', uploadResults.filter(r => !r.success));
-          }
-        } else {
-          console.log('⚠️ Skipping file upload:', {
-            hasFiles: uploadedFiles.length > 0,
-            hasFolderId: !!response.folderId,
-            folderId: response.folderId
-          });
+          // Mostrar resultado final por 2 segundos antes de finalizar
+          setTimeout(() => {
+            setUploadProgress(prev => ({
+              ...prev,
+              isUploading: false
+            }));
+          }, 2000);
         }
         
         // Mostrar mensaje final basado en el resultado de los uploads
@@ -215,7 +335,6 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
         onSubmit(false, errorMessage);
       }
     } catch (error) {
-      console.error('❌ Form submission error:', error);
       let errorMessage = 'An error occurred. Please try again.';
       
       // Extract specific error message if available
@@ -242,10 +361,11 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
     } finally {
       setIsSubmitting(false);
     }
-  };
+  }, [formData, uploadedFiles, uploadProgress.failedUploads, fileValidation, onSubmit]);
 
-  const nextStep = () => setCurrentStep(prev => Math.min(prev + 1, 4));
-  const prevStep = () => setCurrentStep(prev => Math.max(prev - 1, 1));
+  // Optimizar navegación de pasos
+  const nextStep = useCallback(() => setCurrentStep(prev => Math.min(prev + 1, 4)), []);
+  const prevStep = useCallback(() => setCurrentStep(prev => Math.max(prev - 1, 1)), []);
 
   return (
     <form onSubmit={handleSubmit} className="space-y-8">
@@ -265,33 +385,38 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
       {uploadProgress.isUploading && (
         <div className="card bg-blue-900/30 border border-blue-500/30">
           <div className="flex items-center justify-between mb-2">
-            <h4 className="text-white font-medium">Uploading Files...</h4>
+            <h4 className="text-white font-medium">Processing Files...</h4>
             <span className="text-blue-300 text-sm">
               {uploadProgress.currentIndex} / {uploadProgress.totalFiles}
             </span>
           </div>
           
           {/* Progress Bar */}
-          <div className="w-full bg-gray-700 rounded-full h-2 mb-3">
+          <div className="w-full bg-gray-700 rounded-full h-3 mb-3">
             <div 
-              className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+              className="bg-blue-500 h-3 rounded-full transition-all duration-500"
               style={{ width: `${(uploadProgress.currentIndex / uploadProgress.totalFiles) * 100}%` }}
             ></div>
           </div>
           
           {/* Current File */}
           <div className="text-sm text-blue-200 mb-2">
-            <span className="font-medium">Current:</span> {uploadProgress.currentFile}
+            <span className="font-medium">Status:</span> {uploadProgress.currentFile}
           </div>
           
           {/* Status */}
-          <div className="flex justify-between text-xs">
+          <div className="flex justify-between text-xs mb-2">
             <span className="text-green-400">
               ✅ {uploadProgress.successfulUploads} successful
             </span>
             <span className="text-red-400">
               ❌ {uploadProgress.failedUploads} failed
             </span>
+          </div>
+          
+          {/* Progress Percentage */}
+          <div className="text-center text-xs text-blue-300">
+            {Math.round((uploadProgress.currentIndex / uploadProgress.totalFiles) * 100)}% Complete
           </div>
           
           {/* Error Messages */}
@@ -575,6 +700,8 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
                 Upload screenshots of your onboarding flow to help us provide more specific recommendations.
                 <br />
                 <strong>Limit: 10MB total</strong> • {uploadedFiles.length} file(s) uploaded • {Math.round(totalFileSize / 1024 / 1024 * 100) / 100}MB used
+                <br />
+                <span className="text-yellow-300">Debug: State - Files: {uploadedFiles.length}, Size: {totalFileSize} bytes</span>
               </p>
               {uploadedFiles.length > 0 && (
                 <div className="mt-2">
@@ -640,7 +767,7 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
              className="btn-primary ml-auto"
            >
              {uploadProgress.isUploading 
-               ? `Uploading Files... (${uploadProgress.currentIndex}/${uploadProgress.totalFiles})`
+               ? `Processing Files... (${uploadProgress.currentIndex}/${uploadProgress.totalFiles})`
                : isSubmitting 
                  ? 'Submitting...' 
                  : 'Submit Audit Request'

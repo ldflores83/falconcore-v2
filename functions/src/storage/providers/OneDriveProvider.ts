@@ -39,4 +39,9 @@ export class OneDriveProvider implements StorageProvider {
     // TODO: Implementar cuando se necesite OneDrive
     throw new Error("OneDrive provider not implemented yet");
   }
+
+  async findOrCreateFolder(folderName: string, projectId: string, accessToken: string, refreshToken?: string): Promise<string> {
+    // Para OneDrive, simplemente crear la carpeta (no hay búsqueda eficiente)
+    return this.createFolderWithTokens('onedrive_user', projectId, accessToken, refreshToken);
+  }
 }

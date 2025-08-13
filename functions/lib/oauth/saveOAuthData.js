@@ -36,47 +36,25 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.saveOAuthData = void 0;
 const admin = __importStar(require("firebase-admin"));
-// Función para obtener Firestore de forma lazy
-const getFirestore = () => {
-    if (!admin.apps.length) {
-        // Inicializar Firebase sin credenciales de servicio automáticas
-        // para evitar conflictos con OAuth
-        admin.initializeApp({
-            projectId: 'falconcore-v2',
-            // No especificar credential para usar la autenticación por defecto
-            // que funciona mejor con OAuth
-        });
-    }
-    return admin.firestore();
-};
-const saveOAuthData = async (params) => {
+const encryption_1 = require("../utils/encryption");
+const saveOAuthData = async (data) => {
     try {
-        const db = getFirestore();
-        // Guardar datos OAuth en Firestore
-        await db.collection('oauth_credentials').doc(params.userId).set({
-            accessToken: params.accessToken,
-            refreshToken: params.refreshToken || null,
-            expiryDate: params.expiresAt || null,
-            projectId: params.projectId,
-            folderId: params.folderId,
-            email: params.email,
-            createdAt: new Date(),
-            updatedAt: new Date()
-        });
-        console.log('✅ OAuth data saved successfully:', {
-            userId: params.userId,
-            projectId: params.projectId,
-            email: params.email,
-            folderId: params.folderId
-        });
-        return {
-            success: true,
-            message: 'OAuth data saved successfully'
+        // Cifrar tokens antes de guardar
+        const encryptedData = {
+            ...data,
+            accessToken: await (0, encryption_1.encrypt)(data.accessToken),
+            refreshToken: data.refreshToken ? await (0, encryption_1.encrypt)(data.refreshToken) : undefined,
+            createdAt: admin.firestore.Timestamp.now(),
+            updatedAt: admin.firestore.Timestamp.now()
         };
+        await admin.firestore()
+            .collection('oauth_credentials')
+            .doc(data.clientId)
+            .set(encryptedData);
     }
     catch (error) {
-        console.error('❌ Error saving OAuth data:', error);
-        throw error;
+        console.error('❌ OAuth: Error saving OAuth data:', error);
+        throw new Error(`Failed to save OAuth data: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
 };
 exports.saveOAuthData = saveOAuthData;

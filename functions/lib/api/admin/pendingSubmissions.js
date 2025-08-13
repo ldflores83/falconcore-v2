@@ -36,6 +36,7 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getPendingSubmissions = void 0;
 const getOAuthCredentials_1 = require("../../oauth/getOAuthCredentials");
+const hash_1 = require("../../utils/hash");
 const admin = __importStar(require("firebase-admin"));
 // Función para obtener Firestore de forma lazy
 const getFirestore = () => {
@@ -48,22 +49,23 @@ const getFirestore = () => {
 };
 const getPendingSubmissions = async (req, res) => {
     try {
-        const { projectId, userId } = req.body;
-        if (!projectId || !userId) {
+        const { projectId, clientId } = req.body;
+        if (!projectId || !clientId) {
             return res.status(400).json({
                 success: false,
-                message: "Missing required parameters: projectId and userId"
+                message: "Missing required parameters: projectId and clientId"
             });
         }
-        // Verificar que el userId corresponde al email autorizado
-        if (!userId.includes('luisdaniel883@gmail.com')) {
+        // Verificar que el clientId corresponde al email autorizado
+        const expectedClientId = (0, hash_1.generateClientId)('luisdaniel883@gmail.com', projectId);
+        if (clientId !== expectedClientId) {
             return res.status(403).json({
                 success: false,
                 message: "Access denied. Only authorized administrators can access submissions."
             });
         }
         // Verificar credenciales OAuth
-        const credentials = await (0, getOAuthCredentials_1.getOAuthCredentials)(userId);
+        const credentials = await (0, getOAuthCredentials_1.getOAuthCredentials)(clientId);
         if (!credentials) {
             return res.status(401).json({
                 success: false,
@@ -104,7 +106,7 @@ const getPendingSubmissions = async (req, res) => {
         });
         console.log('✅ Pending submissions loaded:', {
             projectId,
-            userId,
+            clientId,
             pendingCount: pendingSubmissions.length
         });
         return res.status(200).json({

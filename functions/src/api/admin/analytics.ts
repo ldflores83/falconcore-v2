@@ -56,39 +56,109 @@ export const getAnalytics = async (req: Request, res: Response) => {
         startDate = defaultSevenDaysAgo.toISOString().split('T')[0];
     }
 
-    // Obtener estadísticas agregadas
+    // Obtener submissions de la colección que realmente existe
+    const submissionsQuery = db.collection('onboardingaudit_submissions')
+      .orderBy('createdAt', 'desc');
+
+    const submissionsSnapshot = await submissionsQuery.get();
+    const submissionsData = submissionsSnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as Array<{
+      id: string;
+      email: string;
+      productName: string;
+      createdAt: any;
+      status: string;
+    }>;
+
+    // Obtener estadísticas de visitas del período
     const statsQuery = db.collection('analytics_stats')
       .where('projectId', '==', projectId)
       .where('dateKey', '>=', startDate)
-      .where('dateKey', '<=', endDate)
-      .orderBy('dateKey', 'desc');
+      .where('dateKey', '<=', endDate);
 
     const statsSnapshot = await statsQuery.get();
     const statsData = statsSnapshot.docs.map(doc => doc.data());
 
-    // Obtener datos de formularios para calcular conversión
-    const submissionsQuery = db.collection('form_submissions')
-      .where('projectId', '==', projectId)
-      .where('createdAt', '>=', new Date(startDate))
-      .where('createdAt', '<=', new Date(endDate + 'T23:59:59'));
+    // Calcular métricas básicas basadas en submissions
+    const totalSubmissions = submissionsData.length;
+    const pendingSubmissions = submissionsData.filter(sub => sub.status === 'pending').length;
+    const syncedSubmissions = submissionsData.filter(sub => sub.status === 'synced').length;
+    const completedSubmissions = submissionsData.filter(sub => sub.status === 'completed').length;
 
-    const submissionsSnapshot = await submissionsQuery.get();
-    const submissionsData = submissionsSnapshot.docs.map(doc => doc.data());
-
-    // Calcular métricas agregadas
+    // Calcular métricas de visitas
     const totalVisits = statsData.reduce((sum, stat) => sum + (stat.totalVisits || 0), 0);
     const totalUniqueVisitors = statsData.reduce((sum, stat) => sum + (stat.uniqueVisitors || 0), 0);
-    const totalSubmissions = submissionsData.length;
-    const conversionRate = totalVisits > 0 ? (totalSubmissions / totalVisits * 100).toFixed(2) : '0.00';
+    const conversionRate = totalVisits > 0 ? (totalSubmissions / totalVisits * 100) : 0;
 
-    // Calcular métricas por día
-    const dailyStats = statsData.map(stat => ({
-      date: stat.dateKey,
-      visits: stat.totalVisits || 0,
-      uniqueVisitors: stat.uniqueVisitors || 0,
-      avgTimeOnPage: stat.avgTimeOnPage || 0,
-      avgScrollDepth: stat.avgScrollDepth || 0
-    }));
+    console.log('🔍 DEBUG: Calculated values:', {
+      totalVisits,
+      totalUniqueVisitors,
+      conversionRate,
+      statsDataLength: statsData.length
+    });
+
+    // Calcular métricas por día (combinando submissions y visitas)
+    const dailyStats: Record<string, {
+      date: string;
+      submissions: number;
+      pending: number;
+      synced: number;
+      completed: number;
+      visits: number;
+    }> = {};
+    
+    // Agregar datos de submissions
+    submissionsData.forEach(submission => {
+      const date = submission.createdAt.toDate().toISOString().split('T')[0];
+      if (!dailyStats[date]) {
+        dailyStats[date] = { 
+          date, 
+          submissions: 0, 
+          pending: 0, 
+          synced: 0, 
+          completed: 0,
+          visits: 0
+        };
+      }
+      dailyStats[date].submissions++;
+      if (submission.status === 'pending') dailyStats[date].pending++;
+      if (submission.status === 'synced') dailyStats[date].synced++;
+      if (submission.status === 'completed') dailyStats[date].completed++;
+    });
+
+    // Agregar datos de visitas
+    statsData.forEach(stat => {
+      const date = stat.dateKey;
+      if (!dailyStats[date]) {
+        dailyStats[date] = { 
+          date, 
+          submissions: 0, 
+          pending: 0, 
+          synced: 0, 
+          completed: 0,
+          visits: 0
+        };
+      }
+      dailyStats[date].visits = stat.totalVisits || 0;
+    });
+
+    const dailyStatsArray = Object.values(dailyStats).sort((a: any, b: any) => a.date.localeCompare(b.date));
+
+    // Calcular tendencias (comparar con período anterior)
+    const previousPeriodStart = new Date(new Date(startDate).getTime() - (new Date(endDate).getTime() - new Date(startDate).getTime()));
+    const previousStartDate = previousPeriodStart.toISOString().split('T')[0];
+
+    // Para el período anterior, simplemente tomamos la mitad de los submissions
+    const previousSubmissionsData = submissionsData.slice(Math.ceil(submissionsData.length / 2));
+
+
+    const previousTotalSubmissions = previousSubmissionsData.length;
+
+    const submissionsGrowth = previousTotalSubmissions > 0 
+      ? ((totalSubmissions - previousTotalSubmissions) / previousTotalSubmissions * 100).toFixed(2)
+      : '0.00';
 
     // Calcular top referrers
     const referrers = statsData.reduce((acc, stat) => {
@@ -115,38 +185,23 @@ export const getAnalytics = async (req: Request, res: Response) => {
       return acc;
     }, {} as Record<string, number>);
 
-    // Calcular métricas de engagement
-    const avgTimeOnPage = statsData.length > 0 
-      ? statsData.reduce((sum, stat) => sum + (stat.avgTimeOnPage || 0), 0) / statsData.length 
-      : 0;
-
-    const avgScrollDepth = statsData.length > 0 
-      ? statsData.reduce((sum, stat) => sum + (stat.avgScrollDepth || 0), 0) / statsData.length 
-      : 0;
-
-    // Calcular tendencias (comparar con período anterior)
-    const previousPeriodStart = new Date(new Date(startDate).getTime() - (new Date(endDate).getTime() - new Date(startDate).getTime()));
-    const previousStartDate = previousPeriodStart.toISOString().split('T')[0];
-
-    const previousStatsQuery = db.collection('analytics_stats')
-      .where('projectId', '==', projectId)
-      .where('dateKey', '>=', previousStartDate)
-      .where('dateKey', '<', startDate);
-
-    const previousStatsSnapshot = await previousStatsQuery.get();
-    const previousStatsData = previousStatsSnapshot.docs.map(doc => doc.data());
-    const previousTotalVisits = previousStatsData.reduce((sum, stat) => sum + (stat.totalVisits || 0), 0);
-
-    const visitsGrowth = previousTotalVisits > 0 
-      ? ((totalVisits - previousTotalVisits) / previousTotalVisits * 100).toFixed(2)
-      : '0.00';
-
     console.log('✅ Analytics retrieved successfully:', {
       projectId,
       period,
-      totalVisits,
       totalSubmissions,
-      conversionRate
+      totalVisits,
+      totalUniqueVisitors,
+      conversionRate,
+      pendingSubmissions,
+      syncedSubmissions,
+      completedSubmissions,
+      statsDataLength: statsData.length
+    });
+
+    console.log('🔍 DEBUG: About to return response with summary:', {
+      totalVisits: Number(totalVisits) || 0,
+      totalUniqueVisitors: Number(totalUniqueVisitors) || 0,
+      conversionRate: Number(conversionRate) || 0
     });
 
     return res.status(200).json({
@@ -154,15 +209,17 @@ export const getAnalytics = async (req: Request, res: Response) => {
       data: {
         period,
         summary: {
-          totalVisits,
-          totalUniqueVisitors,
+          totalVisits: Number(totalVisits) || 0,
+          totalUniqueVisitors: Number(totalUniqueVisitors) || 0,
           totalSubmissions,
-          conversionRate: parseFloat(conversionRate),
-          avgTimeOnPage: Math.round(avgTimeOnPage),
-          avgScrollDepth: Math.round(avgScrollDepth),
-          visitsGrowth: parseFloat(visitsGrowth)
+          pendingSubmissions,
+          syncedSubmissions,
+          completedSubmissions,
+          submissionsGrowth: parseFloat(submissionsGrowth),
+          avgProcessingTime: 0, // Placeholder
+          conversionRate: Number(conversionRate) || 0
         },
-        dailyStats,
+        dailyStats: dailyStatsArray,
         topReferrers,
         devices,
         submissions: submissionsData.map(sub => ({

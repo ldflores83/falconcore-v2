@@ -81,32 +81,23 @@ export default function AdminPanel() {
   // Memoized stats
   const memoizedStats = useMemo(() => stats, [stats]);
 
-         const checkAuthAndLoadData = useCallback(async () => {
-       console.log('🔍 Frontend: checkAuthAndLoadData STARTED');
-       console.log('🔍 Frontend: window.location.search at start:', window.location.search);
-       
+              const checkAuthAndLoadData = useCallback(async () => {
      try {
        // Extraer token de sesión de la URL si existe
        const urlParams = new URLSearchParams(window.location.search);
        const sessionToken = urlParams.get('token');
-      
-      console.log('🔍 Frontend: URL search params:', window.location.search);
-      console.log('🔍 Frontend: Extracted sessionToken:', sessionToken);
-      
-      // Limpiar la URL después de extraer el token
-      if (sessionToken) {
-        window.history.replaceState({}, document.title, window.location.pathname);
-        console.log('🔍 Frontend: URL cleaned, sessionToken extracted');
-      }
+       
+       // Limpiar la URL después de extraer el token
+       if (sessionToken) {
+         window.history.replaceState({}, document.title, window.location.pathname);
+       }
 
-      // Si tenemos un sessionToken, intentar autenticación con sesión
-      if (sessionToken) {
-        const requestBody = {
-          projectId: 'onboardingaudit',
-          sessionToken: sessionToken
-        };
-        
-        console.log('🔍 Frontend: Making auth request with body:', requestBody);
+       // Si tenemos un sessionToken, intentar autenticación con sesión
+       if (sessionToken) {
+         const requestBody = {
+           projectId: 'onboardingaudit',
+           sessionToken: sessionToken
+         };
         
         const authResponse = await fetch('https://api-fu54nvsqfa-uc.a.run.app/api/auth/check', {
           method: 'POST',
@@ -191,6 +182,41 @@ export default function AdminPanel() {
     }
   }, [router, userClientId]);
 
+  // Función separada para recargar solo los datos sin verificar autenticación
+  const reloadSubmissionsData = useCallback(async () => {
+    try {
+      const clientId = userClientId || 'e34cada489125b06714195f25d820e3da84333c4166548bba77e1952e05a6912';
+      
+      const submissionsResponse = await fetch('https://api-fu54nvsqfa-uc.a.run.app/api/admin/submissions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          projectId: 'onboardingaudit',
+          clientId: clientId
+        })
+      });
+
+      if (submissionsResponse.ok) {
+        const submissionsData = await submissionsResponse.json();
+        setSubmissions(submissionsData.submissions || []);
+        
+        // Calcular stats
+        const total = submissionsData.submissions?.length || 0;
+        const pending = submissionsData.submissions?.filter((s: any) => s.status === 'pending').length || 0;
+        const synced = submissionsData.submissions?.filter((s: any) => s.status === 'synced').length || 0;
+        const inProgress = submissionsData.submissions?.filter((s: any) => s.status === 'in_progress').length || 0;
+        const completed = submissionsData.submissions?.filter((s: any) => s.status === 'completed').length || 0;
+        const error = submissionsData.submissions?.filter((s: any) => s.status === 'error').length || 0;
+        
+        setStats({ total, pending, completed: completed + inProgress, error });
+      }
+    } catch (error) {
+      console.error('Failed to reload submissions data:', error);
+    }
+  }, [userClientId]);
+
   const handleStatusUpdate = useCallback(async (submissionId: string, newStatus: string) => {
     try {
       const response = await fetch('https://api-fu54nvsqfa-uc.a.run.app/api/admin/updateSubmissionStatus', {
@@ -207,13 +233,13 @@ export default function AdminPanel() {
       });
 
       if (response.ok) {
-        // Recargar datos
-        await checkAuthAndLoadData();
+        // Recargar solo los datos, no verificar autenticación
+        await reloadSubmissionsData();
       }
     } catch (error) {
       setError('Failed to update status');
     }
-  }, [checkAuthAndLoadData, userClientId]);
+  }, [reloadSubmissionsData, userClientId]);
 
   const handleProcessSubmissions = useCallback(async () => {
     try {
@@ -229,13 +255,13 @@ export default function AdminPanel() {
       });
 
       if (response.ok) {
-        // Recargar datos
-        await checkAuthAndLoadData();
+        // Recargar solo los datos, no verificar autenticación
+        await reloadSubmissionsData();
       }
     } catch (error) {
       setError('Failed to process submissions');
     }
-  }, [checkAuthAndLoadData, userClientId]);
+  }, [reloadSubmissionsData, userClientId]);
 
   const handleCleanupSessions = useCallback(async () => {
     try {
@@ -251,23 +277,17 @@ export default function AdminPanel() {
       });
 
       if (response.ok) {
-        // Recargar datos
-        await checkAuthAndLoadData();
+        // Recargar solo los datos, no verificar autenticación
+        await reloadSubmissionsData();
       }
     } catch (error) {
       setError('Failed to cleanup sessions');
     }
-  }, [checkAuthAndLoadData, userClientId]);
+  }, [reloadSubmissionsData, userClientId]);
 
   useEffect(() => {
-    console.log('🔍 Frontend: useEffect triggered, calling checkAuthAndLoadData');
-    console.log('🔍 Frontend: AdminPanel component mounted');
-    console.log('🔍 Frontend: Current URL:', window.location.href);
-    console.log('🔍 Frontend: URL search params:', window.location.search);
-    
     // Agregar un pequeño delay para asegurar que la URL esté completamente cargada
     const timer = setTimeout(() => {
-      console.log('🔍 Frontend: Timer fired, now calling checkAuthAndLoadData');
       checkAuthAndLoadData();
     }, 100); // Solo 100ms de delay
 

@@ -34,86 +34,62 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getValidAccessToken = exports.getOAuthCredentials = void 0;
-const googleapis_1 = require("googleapis");
+exports.getOAuthCredentials = void 0;
 const admin = __importStar(require("firebase-admin"));
-const config_1 = require("../config");
-// Función para obtener Firestore de forma lazy
-const getFirestore = () => {
-    if (!admin.apps.length) {
-        // Inicializar Firebase sin credenciales de servicio automáticas
-        // para evitar conflictos con OAuth
-        admin.initializeApp({
-            projectId: 'falconcore-v2',
-            // No especificar credential para usar la autenticación por defecto
-            // que funciona mejor con OAuth
-        });
-    }
-    return admin.firestore();
-};
-const getOAuthCredentials = async (userId = 'onboardingaudit_user') => {
+const encryption_1 = require("../utils/encryption");
+const getOAuthCredentials = async (clientId) => {
     try {
-        const db = getFirestore();
-        const doc = await db.collection('oauth_credentials').doc(userId).get();
+        const doc = await admin.firestore()
+            .collection('oauth_credentials')
+            .doc(clientId)
+            .get();
         if (!doc.exists) {
-            console.log('❌ No se encontraron credenciales OAuth para:', userId);
             return null;
         }
         const data = doc.data();
-        if (!data?.accessToken) {
-            console.log('❌ Credenciales OAuth incompletas para:', userId);
+        if (!data || !data.accessToken || !data.projectId || !data.email) {
             return null;
         }
-        console.log('✅ Credenciales OAuth obtenidas para:', userId);
-        return data;
+        // Descifrar tokens después de leer
+        const decryptedData = {
+            ...data, // Ensure all original fields are carried over
+            accessToken: await (0, encryption_1.decrypt)(data.accessToken),
+            refreshToken: data.refreshToken ? await (0, encryption_1.decrypt)(data.refreshToken) : undefined
+        }; // Cast to any to resolve linter errors temporarily
+        // Verificar si el token ha expirado
+        if (decryptedData.expiresAt && Date.now() > decryptedData.expiresAt) {
+            // Intentar refresh del token
+            const refreshedCredentials = await refreshOAuthToken(clientId, decryptedData);
+            if (refreshedCredentials) {
+                return refreshedCredentials;
+            }
+            return null;
+        }
+        return {
+            clientId: decryptedData.clientId,
+            projectId: decryptedData.projectId,
+            accessToken: decryptedData.accessToken,
+            refreshToken: decryptedData.refreshToken,
+            expiresAt: decryptedData.expiresAt,
+            folderId: decryptedData.folderId,
+            email: decryptedData.email
+        };
     }
     catch (error) {
-        console.error('❌ Error obteniendo credenciales OAuth:', error);
         return null;
     }
 };
 exports.getOAuthCredentials = getOAuthCredentials;
-const getValidAccessToken = async (userId = 'onboardingaudit_user') => {
+const refreshOAuthToken = async (clientId, credentials) => {
     try {
-        const credentials = await (0, exports.getOAuthCredentials)(userId);
-        if (!credentials) {
+        if (!credentials.refreshToken) {
             return null;
         }
-        // Verificar si el token ha expirado
-        if (credentials.expiryDate && Date.now() > credentials.expiryDate) {
-            console.log('⚠️ Token expirado, intentando refresh...');
-            // Intentar refresh del token
-            const oauthConfig = await (0, config_1.getOAuthConfig)();
-            const oauth2Client = new googleapis_1.google.auth.OAuth2(oauthConfig.clientId, oauthConfig.clientSecret, oauthConfig.redirectUri);
-            oauth2Client.setCredentials({
-                access_token: credentials.accessToken,
-                refresh_token: credentials.refreshToken,
-                expiry_date: credentials.expiryDate
-            });
-            try {
-                const { credentials: newCredentials } = await oauth2Client.refreshAccessToken();
-                if (newCredentials.access_token) {
-                    // Actualizar tokens en Firestore
-                    const db = getFirestore();
-                    await db.collection('oauth_credentials').doc(userId).update({
-                        accessToken: newCredentials.access_token,
-                        expiryDate: newCredentials.expiry_date,
-                        updatedAt: new Date()
-                    });
-                    console.log('✅ Token refrescado exitosamente');
-                    return newCredentials.access_token;
-                }
-            }
-            catch (refreshError) {
-                console.error('❌ Error refrescando token:', refreshError);
-                return null;
-            }
-        }
-        return credentials.accessToken;
+        // Aquí implementarías la lógica de refresh del token
+        // Por ahora, simplemente retornamos null para forzar re-autenticación
+        return null;
     }
     catch (error) {
-        console.error('❌ Error obteniendo access token válido:', error);
         return null;
     }
 };
-exports.getValidAccessToken = getValidAccessToken;

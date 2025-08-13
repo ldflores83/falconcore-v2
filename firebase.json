@@ -83,7 +83,7 @@
   "functions": {
     "source": "functions",
     "runtime": "nodejs20",
-    "secrets": ["cloud-storage-key"]
+    "secrets": ["cloud-storage-key", "ENCRYPTION_KEY"]
   },
   "firestore": {
     "rules": "firestore.rules",

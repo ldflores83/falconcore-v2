@@ -1,143 +1,113 @@
 // functions/src/api/admin/updateStatus.ts
 
-import { Request, Response } from "express";
-import { getOAuthCredentials } from '../../oauth/getOAuthCredentials';
-import { GoogleDriveProvider } from '../../storage/providers/GoogleDriveProvider';
+import { Request, Response } from 'express';
+import * as admin from 'firebase-admin';
+import { StorageProviderFactory } from '../../storage/utils/providerFactory';
 
-export const updateSubmissionStatus = async (req: Request, res: Response) => {
+export const updateStatus = async (req: Request, res: Response) => {
   try {
-    const { projectId, userId, submissionId, newStatus } = req.body;
+    const { submissionId, newStatus, projectId } = req.body;
 
-    if (!projectId || !userId || !submissionId || !newStatus) {
+    if (!submissionId || !newStatus || !projectId) {
       return res.status(400).json({
         success: false,
-        message: "Missing required parameters: projectId, userId, submissionId, newStatus"
+        message: "Missing required parameters: submissionId, newStatus, projectId"
       });
     }
 
-    // Verificar que el userId corresponde al email autorizado
-    if (!userId.includes('luisdaniel883@gmail.com')) {
-      return res.status(403).json({
-        success: false,
-        message: "Access denied. Only authorized administrators can update submission status."
-      });
-    }
-
-    // Verificar credenciales OAuth
-    const credentials = await getOAuthCredentials(userId);
-    
-    if (!credentials) {
-      return res.status(401).json({
-        success: false,
-        message: "Not authenticated. Please login first."
-      });
-    }
-
-    // Validar estado válido
-    const validStatuses = ['pending', 'in_progress', 'completed'];
-    if (!validStatuses.includes(newStatus)) {
+    // Validar status permitidos
+    const allowedStatuses = ['pending', 'processing', 'completed', 'error', 'cancelled'];
+    if (!allowedStatuses.includes(newStatus)) {
       return res.status(400).json({
         success: false,
-        message: "Invalid status. Must be one of: pending, in_progress, completed"
+        message: "Invalid status. Allowed values: pending, processing, completed, error, cancelled"
       });
     }
 
-    // Obtener submissions desde Google Drive
-    const provider = new GoogleDriveProvider();
-    
-    // Crear carpeta principal del admin (si no existe)
-    const adminFolderId = await provider.createFolderWithTokens(
-      'luisdaniel883@gmail.com', 
-      projectId, 
-      credentials.accessToken,
-      credentials.refreshToken
-    );
-    
-    // Listar TODAS las subcarpetas en la carpeta del admin
-    const allFiles = [];
-    
-    // Primero, listar las subcarpetas (folders)
-    const folders = await provider.listFilesWithTokens(
-      adminFolderId, 
-      credentials.accessToken,
-      credentials.refreshToken
-    );
-    
-    // Buscar archivos .md en cada subcarpeta
-    for (const folder of folders) {
-      if (folder.mimeType === 'application/vnd.google-apps.folder') {
-        const subfolderFiles = await provider.listFilesWithTokens(
-          folder.id, 
-          credentials.accessToken,
-          credentials.refreshToken
-        );
-        
-        // Agregar archivos .md encontrados
-        const mdFiles = subfolderFiles.filter(file => 
-          file.name.includes('Onboarding_Audit_') && 
-          file.mimeType === 'text/markdown'
-        );
-        
-        allFiles.push(...mdFiles);
-      }
-    }
-    
-    // Encontrar el archivo específico
-    const targetFile = allFiles.find(file => file.id === submissionId);
-    
-    if (!targetFile) {
+    // Obtener la submission
+    const submissionRef = admin.firestore().collection('submissions').doc(submissionId);
+    const submissionDoc = await submissionRef.get();
+
+    if (!submissionDoc.exists) {
       return res.status(404).json({
         success: false,
         message: "Submission not found"
       });
     }
 
-    // Crear un archivo de estado en la misma carpeta
-    const statusFileName = `status_${newStatus}_${new Date().toISOString().slice(0, 10)}.txt`;
-    const statusContent = `Status: ${newStatus}\nUpdated: ${new Date().toISOString()}\nUpdatedBy: ${userId}`;
-    const statusBuffer = Buffer.from(statusContent, 'utf-8');
-    
-    try {
-      await provider.uploadFileWithTokens({
-        folderId: targetFile.parents?.[0] || adminFolderId,
-        filename: statusFileName,
-        contentBuffer: statusBuffer,
-        mimeType: 'text/plain',
-        accessToken: credentials.accessToken,
-        refreshToken: credentials.refreshToken
-      });
+    const submission = submissionDoc.data();
 
-      console.log('✅ Submission status updated:', {
-        submissionId,
-        newStatus,
-        projectId,
-        userId
-      });
+    // Si el nuevo status es 'completed', procesar archivos
+    if (newStatus === 'completed' && submission?.files && submission.files.length > 0) {
+      try {
+        const provider = StorageProviderFactory.createProvider('google');
+        
+        // Crear carpeta si no existe
+        let folderId = submission.folderId;
+        if (!folderId) {
+          folderId = await provider.createFolder(submission.userEmail, projectId);
+        }
 
-      return res.status(200).json({
-        success: true,
-        message: `Submission status updated to ${newStatus}`,
-        submissionId,
-        newStatus
-      });
+        // Subir archivos usando la interfaz estándar
+        for (const file of submission.files) {
+          try {
+            await provider.uploadFile({
+              folderId,
+              filename: file.filename,
+              contentBuffer: Buffer.from(file.content, 'base64'),
+              mimeType: file.mimeType
+            });
+          } catch (fileError) {
+            console.error(`❌ Error uploading file ${file.filename}:`, fileError);
+          }
+        }
 
-    } catch (error) {
-      console.error('❌ Error updating submission status:', error);
-      
-      return res.status(500).json({
-        success: false,
-        message: "Failed to update submission status",
-        error: error instanceof Error ? error.message : 'Unknown error'
+        // Actualizar con folderId
+        await submissionRef.update({
+          status: newStatus,
+          folderId,
+          updatedAt: admin.firestore.Timestamp.now()
+        });
+
+      } catch (error) {
+        console.error('❌ Error processing files:', error);
+        
+        // Marcar como error si falla el procesamiento
+        await submissionRef.update({
+          status: 'error',
+          errorMessage: 'Failed to process files',
+          updatedAt: admin.firestore.Timestamp.now()
+        });
+
+        return res.status(500).json({
+          success: false,
+          message: "Failed to process files",
+          error: error instanceof Error ? error.message : "Unknown error"
+        });
+      }
+    } else {
+      // Actualizar status sin procesar archivos
+      await submissionRef.update({
+        status: newStatus,
+        updatedAt: admin.firestore.Timestamp.now()
       });
     }
 
+    return res.status(200).json({
+      success: true,
+      message: "Status updated successfully",
+      data: {
+        submissionId,
+        newStatus,
+        updatedAt: new Date().toISOString()
+      }
+    });
+
   } catch (error) {
-    console.error('❌ Error in updateSubmissionStatus:', error);
-    
     return res.status(500).json({
       success: false,
-      message: "Failed to update submission status",
-      error: error instanceof Error ? error.message : 'Unknown error'
+      message: "Failed to update status",
+      error: error instanceof Error ? error.message : "Unknown error"
     });
   }
 }; 
