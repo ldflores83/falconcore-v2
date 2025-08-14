@@ -125,25 +125,6 @@ export default function OnboardingAudit() {
             <p className="text-xl text-gray-200 mb-8 leading-relaxed">
               We'll review your signup flow and deliver a 2-3 page report with actionable recommendations to improve your user activation and reduce churn.
             </p>
-            
-            <div className="flex flex-wrap justify-center gap-4 text-sm text-gray-300">
-              <div className="flex items-center">
-                <span className="w-2 h-2 bg-green-400 rounded-full mr-2"></span>
-                Free audit
-              </div>
-              <div className="flex items-center">
-                <span className="w-2 h-2 bg-green-400 rounded-full mr-2"></span>
-                2-3 page report
-              </div>
-              <div className="flex items-center">
-                <span className="w-2 h-2 bg-green-400 rounded-full mr-2"></span>
-                Actionable insights
-              </div>
-              <div className="flex items-center">
-                <span className="w-2 h-2 bg-green-400 rounded-full mr-2"></span>
-                48-hour delivery
-              </div>
-            </div>
           </div>
         </div>
 
@@ -202,46 +183,7 @@ export default function OnboardingAudit() {
                 </div>
               )}
 
-              {/* Benefits Section */}
-              {!isLoading && canSubmit && (
-                <div className="grid md:grid-cols-3 gap-6 mb-8">
-                <div className="card text-center">
-                  <div className="w-12 h-12 bg-primary-500 rounded-lg flex items-center justify-center mx-auto mb-4">
-                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  </div>
-                  <h3 className="text-lg font-semibold text-white mb-2">Identify Friction</h3>
-                  <p className="text-sm text-gray-300">
-                    We'll pinpoint exactly where users drop off in your onboarding flow
-                  </p>
-                </div>
-                
-                <div className="card text-center">
-                  <div className="w-12 h-12 bg-success-500 rounded-lg flex items-center justify-center mx-auto mb-4">
-                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                    </svg>
-                  </div>
-                  <h3 className="text-lg font-semibold text-white mb-2">Actionable Insights</h3>
-                  <p className="text-sm text-gray-300">
-                    Get specific recommendations you can implement immediately
-                  </p>
-                </div>
-                
-                <div className="card text-center">
-                  <div className="w-12 h-12 bg-yellow-500 rounded-lg flex items-center justify-center mx-auto mb-4">
-                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  </div>
-                  <h3 className="text-lg font-semibold text-white mb-2">Fast Delivery</h3>
-                  <p className="text-sm text-gray-300">
-                    Receive your comprehensive report within 48 hours
-                  </p>
-                </div>
-              </div>
-              )}
+
 
               {/* Form */}
               {!isLoading && canSubmit && (

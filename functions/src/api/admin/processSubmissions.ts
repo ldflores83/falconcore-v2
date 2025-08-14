@@ -71,10 +71,12 @@ export const processSubmissions = async (req: Request, res: Response) => {
     // 3. Procesar cada submission individualmente y crear su carpeta específica DENTRO de la carpeta de trabajo
     for (const doc of submissionsToProcess.docs) {
       const submission = doc.data();
-      console.log(`📋 Processing submission ${doc.id} for user ${submission.email}`);
+      console.log(`📋 Processing submission ${doc.id} for user ${submission.report_email}`);
 
-      // 1. Crear carpeta específica para esta submission DENTRO de la carpeta de trabajo del admin
-      const submissionFolderName = `${submission.email}_${projectId}`;
+             // 1. Crear carpeta específica para esta submission DENTRO de la carpeta de trabajo del admin
+       const productName = submission.product_name || 'Unknown_Product';
+       const safeProductName = productName.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 30); // Limitar longitud para nombres de carpeta
+       const submissionFolderName = `${safeProductName}_${submission.report_email}_${projectId}`;
       const submissionFolderId = await provider.findOrCreateFolder(
         submissionFolderName, 
         projectId, 
@@ -87,14 +89,14 @@ export const processSubmissions = async (req: Request, res: Response) => {
 
       // 2. Verificar y subir archivos adjuntos de esta submission desde Cloud Storage
       if (submission.attachments && submission.attachments.length > 0) {
-        console.log(`📁 Processing ${submission.attachments.length} attachments for ${submission.email}`);
+        console.log(`📁 Processing ${submission.attachments.length} attachments for ${submission.report_email}`);
         
         const bucket = admin.storage().bucket('falconcore-onboardingaudit-uploads');
         let validAttachments = 0;
         
         for (const attachment of submission.attachments) {
           try {
-            console.log(`📄 Processing attachment: ${attachment.filename} for ${submission.email}`);
+            console.log(`📄 Processing attachment: ${attachment.filename} for ${submission.report_email}`);
             
             // Verificar que el archivo existe en Cloud Storage
             const file = bucket.file(attachment.filePath);
@@ -129,14 +131,18 @@ export const processSubmissions = async (req: Request, res: Response) => {
           }
         }
         
-        console.log(`📊 Successfully processed ${validAttachments}/${submission.attachments.length} attachments for ${submission.email}`);
+        console.log(`📊 Successfully processed ${validAttachments}/${submission.attachments.length} attachments for ${submission.report_email}`);
       }
 
       // 3. Crear documento del formulario para esta submission
       try {
         const documentContent = generateFormDocument(submission);
         const documentBuffer = Buffer.from(documentContent, 'utf-8');
-        const documentFilename = `Onboarding_Audit_${submission.email}_${new Date().toISOString().split('T')[0]}.md`;
+        
+        // Crear nombre de archivo seguro usando el nombre del producto
+        const productName = submission.product_name || 'Unknown_Product';
+        const safeProductName = productName.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 50); // Limitar longitud y caracteres seguros
+        const documentFilename = `Onboarding_Audit_${safeProductName}_${submission.report_email}_${new Date().toISOString().split('T')[0]}.md`;
         
         const documentResult = await provider.uploadFile({
           folderId: submissionFolderId,
@@ -147,11 +153,11 @@ export const processSubmissions = async (req: Request, res: Response) => {
           refreshToken: credentials.refreshToken
         });
 
-        console.log(`✅ Document created in Drive: ${documentResult.id} for ${submission.email} in folder ${submissionFolderName}`);
+        console.log(`✅ Document created in Drive: ${documentResult.id} for ${submission.report_email} in folder ${submissionFolderName}`);
         processedCount++;
         
       } catch (docError) {
-        console.error(`❌ Error creating document for ${submission.email}:`, docError);
+        console.error(`❌ Error creating document for ${submission.report_email}:`, docError);
         errorCount++;
       }
     }
@@ -183,7 +189,9 @@ export const processSubmissions = async (req: Request, res: Response) => {
     for (const doc of submissionsToProcess.docs) {
       try {
         const submission = doc.data();
-        const submissionFolderName = `${submission.email}_${projectId}`;
+        const productName = submission.product_name || 'Unknown_Product';
+        const safeProductName = productName.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 30);
+        const submissionFolderName = `${safeProductName}_${submission.report_email}_${projectId}`;
         
         await doc.ref.update({
           status: 'synced',
@@ -229,27 +237,62 @@ function generateFormDocument(submission: any): string {
   return `# Onboarding Audit Request
 
 **Submitted:** ${timestamp}
-**Product:** ${submission.productName}
-**Email:** ${submission.email}
+**Product:** ${submission.product_name}
+**Email:** ${submission.report_email}
 
 ## Product Basics
-- **Product Name:** ${submission.productName}
-- **Product URL:** ${submission.productUrl}
-- **Target User:** ${submission.targetUser}
+- **Product Name:** ${submission.product_name}
+- **Signup Link:** ${submission.signup_link}
+- **Target User:** ${submission.target_user}
+- **Value Proposition:** ${submission.value_prop}
+- **ICP Company Size:** ${submission.icp_company_size}
+- **ICP Industry:** ${submission.icp_industry}
+- **ICP Primary Role:** ${submission.icp_primary_role}
+- **Day-1 JTBD:** ${submission.day1_jtbd}
+- **Pricing Tier:** ${submission.pricing_tier}
+- **Main Competitor:** ${submission.main_competitor || 'None specified'}
 
 ## Current Onboarding Flow
-- **Signup Method:** ${submission.signupMethod}${submission.signupMethodOther ? ` (${submission.signupMethodOther})` : ''}
-- **First Time Experience:** ${submission.firstTimeExperience}${submission.firstTimeExperienceOther ? ` (${submission.firstTimeExperienceOther})` : ''}
-- **Track Dropoff:** ${submission.trackDropoff}
+- **Signup Methods:** ${submission.signup_methods?.join(', ') || 'Not specified'}
+- **First Screen:** ${submission.first_screen}
+- **Track Dropoffs:** ${submission.track_dropoffs}
+- **Activation Definition:** ${submission.activation_definition}
+- **Aha Moment:** ${submission.aha_moment || 'None specified'}
+- **Time to Aha:** ${submission.time_to_aha_minutes ? `${submission.time_to_aha_minutes} minutes` : 'Not specified'}
+- **Blocking Steps:** ${submission.blocking_steps?.join(', ') || 'None'}
+- **Platforms:** ${submission.platforms?.join(', ') || 'Not specified'}
+- **Compliance Constraints:** ${submission.compliance_constraints?.join(', ') || 'None'}
+
+## Analytics & Access
+- **Analytics Tool:** ${submission.analytics_tool}
+- **Key Events:** ${submission.key_events?.join(', ') || 'Not specified'}
+- **Signups/Week:** ${submission.signups_per_week || 'Not specified'}
+- **MAU:** ${submission.mau || 'Not specified'}
+- **Mobile %:** ${submission.mobile_percent ? `${submission.mobile_percent}%` : 'Not specified'}
+- **Read-only Access:** ${submission.readonly_access || 'Not specified'}
+- **Access Instructions:** ${submission.access_instructions || 'None provided'}
 
 ## Goal & Metrics
-- **Main Goal:** ${submission.mainGoal}
-- **Know Churn Rate:** ${submission.knowChurnRate}
-- **Churn Timing:** ${submission.churnTiming}
-- **Specific Concerns:** ${submission.specificConcerns || 'None specified'}
+- **Main Goal:** ${submission.main_goal}
+- **Know Churn Rate:** ${submission.know_churn_rate || 'Not specified'}
+- **Churn When:** ${submission.churn_when || 'Not specified'}
+- **Target Improvement:** ${submission.target_improvement_percent ? `${submission.target_improvement_percent}%` : 'Not specified'}
+- **Time Horizon:** ${submission.time_horizon || 'Not specified'}
+- **Main Segments:** ${submission.main_segments?.join(', ') || 'Not specified'}
+- **Constraints:** ${submission.constraints || 'None specified'}
 
 ## Delivery Preferences
-- **Preferred Format:** ${submission.preferredFormat}
+- **Include Benchmarks:** ${submission.include_benchmarks ? 'Yes' : 'No'}
+- **Want A/B Plan:** ${submission.want_ab_plan ? 'Yes' : 'No'}
+- **Walkthrough URL:** ${submission.walkthrough_url || 'None provided'}
+- **Demo Account:** ${submission.demo_account || 'None provided'}
+
+## Optional Evidence
+- **Feature Flags:** ${submission.feature_flags || 'Not specified'}
+- **A/B Tool:** ${submission.ab_tool || 'None specified'}
+- **Languages:** ${submission.languages?.join(', ') || 'Not specified'}
+- **Empty States:** ${submission.empty_states_urls || 'None provided'}
+- **Notifications Provider:** ${submission.notifications_provider || 'None specified'}
 
 ---
 *This audit request was submitted through the Onboarding Audit form and will be processed within 48 hours.*

@@ -9,27 +9,65 @@ interface AuditFormProps {
 
 export default function AuditForm({ onSubmit }: AuditFormProps) {
   const [formData, setFormData] = useState<OnboardingAuditForm>({
-    productName: '',
-    productUrl: '',
-    targetUser: 'Founders',
-    signupMethod: 'Email & Password',
-    signupMethodOther: '',
-    firstTimeExperience: 'A guided walkthrough or tutorial',
-    firstTimeExperienceOther: '',
-    trackDropoff: 'No',
-    hasTestAccess: false,
-    testInstructions: '',
-    onboardingEmails: 'Email',
-    mainGoal: 'Activation',
-    knowChurnRate: 'No',
-    churnTiming: 'Not sure',
-    specificConcerns: '',
-    email: '',
-    preferredFormat: 'Google Doc',
+    // Step 1 - Product Basics
+    product_name: '',
+    signup_link: '',
+    target_user: '',
+    value_prop: '',
+    icp_company_size: '',
+    icp_industry: '',
+    icp_primary_role: '',
+    day1_jtbd: '',
+    pricing_tier: '',
+    main_competitor: '',
+    
+    // Step 2 - Current Onboarding Flow
+    signup_methods: [],
+    first_screen: '',
+    track_dropoffs: '',
+    activation_definition: '',
+    aha_moment: '',
+    time_to_aha_minutes: undefined,
+    blocking_steps: [],
+    platforms: [],
+    compliance_constraints: [],
+    
+    // Step 2.5 - Analytics & Access
+    analytics_tool: '',
+    key_events: [],
+    signups_per_week: undefined,
+    mau: undefined,
+    mobile_percent: undefined,
+    readonly_access: undefined,
+    access_instructions: '',
+    
+    // Step 3 - Goal & Metrics
+    main_goal: '',
+    know_churn_rate: undefined,
+    churn_when: undefined,
+    target_improvement_percent: undefined,
+    time_horizon: undefined,
+    main_segments: [],
+    constraints: '',
+    
+    // Step 4 - Delivery
+    report_email: '',
+    include_benchmarks: false,
+    want_ab_plan: false,
+    screenshots: undefined,
+    walkthrough_url: '',
+    demo_account: '',
+    
+    // Optional Evidence
+    feature_flags: undefined,
+    ab_tool: '',
+    languages: [],
+    empty_states_urls: '',
+    notifications_provider: '',
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [currentStep, setCurrentStep] = useState(1);
+  const [currentStep, setCurrentStep] = useState<number>(1);
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [totalFileSize, setTotalFileSize] = useState(0);
   const [uploadProgress, setUploadProgress] = useState<{
@@ -162,15 +200,28 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
     }
 
     try {
-      const response = await OnboardingAuditClient.submitForm(formData);
-      
-      if (response.success && response.submissionId) {
-        // Track form submission in analytics
-        const tracker = createAnalyticsTracker('onboardingaudit');
-        tracker.trackPageVisit('form_submission');
+              // Transform form data to match backend expectations
+        const transformedFormData = {
+          ...formData,
+          // Ensure arrays are properly formatted
+          signup_methods: formData.signup_methods || [],
+          blocking_steps: formData.blocking_steps || [],
+          platforms: formData.platforms || [],
+          compliance_constraints: formData.compliance_constraints || [],
+          key_events: formData.key_events || [],
+          main_segments: formData.main_segments || [],
+          languages: formData.languages || [],
+        };
 
-        // Upload additional files if any
-        if (uploadedFiles.length > 0 && response.folderId) {
+        const response = await OnboardingAuditClient.submitForm(transformedFormData);
+        
+        if (response.success && response.submissionId) {
+          // Track form submission in analytics
+          const tracker = createAnalyticsTracker('onboardingaudit');
+          tracker.trackPageVisit('form_submission');
+
+          // Upload additional files if any
+          if (uploadedFiles.length > 0 && response.folderId) {
           // Inicializar progreso de upload
           setUploadProgress({
             isUploading: true,
@@ -261,7 +312,7 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
             console.log('🚀 Starting upload with OnboardingAuditClient.uploadMultipleAssets:', {
               submissionId: response.submissionId,
               folderId: response.folderId,
-              userEmail: formData.email,
+              userEmail: formData.report_email,
               processedFilesCount: processedFiles.length
             });
             
@@ -269,7 +320,7 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
               processedFiles, 
               response.submissionId!, 
               response.folderId!, 
-              formData.email
+              formData.report_email
             );
             
             console.log('📤 Upload result:', uploadResult);
@@ -364,8 +415,20 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
   }, [formData, uploadedFiles, uploadProgress.failedUploads, fileValidation, onSubmit]);
 
   // Optimizar navegación de pasos
-  const nextStep = useCallback(() => setCurrentStep(prev => Math.min(prev + 1, 4)), []);
-  const prevStep = useCallback(() => setCurrentStep(prev => Math.max(prev - 1, 1)), []);
+  const nextStep = useCallback(() => {
+    setCurrentStep(prev => {
+      if (prev === 2) return 2.5;
+      if (prev === 2.5) return 3;
+      return Math.min(prev + 1, 5);
+    });
+  }, []);
+  const prevStep = useCallback(() => {
+    setCurrentStep(prev => {
+      if (prev === 3) return 2.5;
+      if (prev === 2.5) return 2;
+      return Math.max(prev - 1, 1);
+    });
+  }, []);
 
   return (
     <form onSubmit={handleSubmit} className="space-y-8">
@@ -373,12 +436,12 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
       <div className="w-full bg-gray-200 rounded-full h-2">
         <div 
           className="bg-primary-600 h-2 rounded-full transition-all duration-300"
-          style={{ width: `${(currentStep / 4) * 100}%` }}
+          style={{ width: `${(currentStep === 2.5 ? 2.5 : currentStep) / 5 * 100}%` }}
         ></div>
       </div>
       
       <div className="text-center text-white mb-6">
-        <span className="text-sm">Step {currentStep} of 4</span>
+        <span className="text-sm">Step {currentStep === 2.5 ? '2.5' : currentStep} of 5</span>
       </div>
 
       {/* File Upload Progress */}
@@ -446,42 +509,169 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
                 type="text"
                 required
                 className="form-input"
-                value={formData.productName}
-                onChange={(e) => handleInputChange('productName', e.target.value)}
-                placeholder="Enter your product name"
+                value={formData.product_name}
+                onChange={(e) => handleInputChange('product_name', e.target.value)}
+                placeholder="e.g., Acme Analytics"
               />
             </div>
             
             <div>
               <label className="block text-white text-sm font-medium mb-2">
-                Link to your signup or homepage *
+                Link to signup or homepage *
               </label>
               <input
                 type="url"
                 required
                 className="form-input"
-                value={formData.productUrl}
-                onChange={(e) => handleInputChange('productUrl', e.target.value)}
-                placeholder="https://yourproduct.com"
+                value={formData.signup_link}
+                onChange={(e) => handleInputChange('signup_link', e.target.value)}
+                placeholder="https://..."
               />
             </div>
             
+                         <div>
+               <label className="block text-white text-sm font-medium mb-2">
+                 Who is your target user? *
+               </label>
+               <select
+                 required
+                 className="form-select"
+                 value={formData.target_user}
+                 onChange={(e) => handleInputChange('target_user', e.target.value)}
+               >
+                 <option value="">Select...</option>
+                 <option value="founders">Founders</option>
+                 <option value="product_managers">Product Managers</option>
+                 <option value="growth">Growth</option>
+                 <option value="customer_success">Customer Success</option>
+                 <option value="marketing">Marketing</option>
+                 <option value="sales">Sales</option>
+                 <option value="operations">Operations</option>
+                 <option value="other">Other</option>
+               </select>
+             </div>
+
             <div>
               <label className="block text-white text-sm font-medium mb-2">
-                Who is your target user? *
+                Value proposition (1 line) *
               </label>
-              <select
+              <input
+                type="text"
                 required
-                className="form-select"
-                value={formData.targetUser}
-                onChange={(e) => handleInputChange('targetUser', e.target.value)}
-              >
-                <option value="Founders">Founders</option>
-                <option value="Developers">Developers</option>
-                <option value="SMBs">SMBs</option>
-                <option value="Consumers">Consumers</option>
-                <option value="Other">Other</option>
-              </select>
+                className="form-input"
+                value={formData.value_prop}
+                onChange={(e) => handleInputChange('value_prop', e.target.value)}
+                placeholder="One-sentence unique value"
+              />
+            </div>
+
+                         <div>
+               <label className="block text-white text-sm font-medium mb-2">
+                 ICP — Company size *
+               </label>
+               <select
+                 required
+                 className="form-select"
+                 value={formData.icp_company_size}
+                 onChange={(e) => handleInputChange('icp_company_size', e.target.value)}
+               >
+                 <option value="">Select...</option>
+                 <option value="startup_1_20">Startup 1–20 employees</option>
+                 <option value="smb_21_200">SMB 21–200 employees</option>
+                 <option value="mid_200_1000">Mid-Market 200–1000</option>
+                 <option value="enterprise_1000_plus">Enterprise 1000+</option>
+               </select>
+             </div>
+
+                         <div>
+               <label className="block text-white text-sm font-medium mb-2">
+                 ICP — Industry *
+               </label>
+               <select
+                 required
+                 className="form-select"
+                 value={formData.icp_industry}
+                 onChange={(e) => handleInputChange('icp_industry', e.target.value)}
+               >
+                 <option value="">Select...</option>
+                 <option value="saas">SaaS</option>
+                 <option value="fintech">Fintech</option>
+                 <option value="ecommerce">E-commerce</option>
+                 <option value="healthtech">Healthtech</option>
+                 <option value="edtech">Edtech</option>
+                 <option value="cybersecurity">Cybersecurity</option>
+                 <option value="logistics">Logistics</option>
+                 <option value="productivity">Productivity</option>
+                 <option value="devtools">DevTools</option>
+                 <option value="other">Other</option>
+               </select>
+             </div>
+
+                         <div>
+               <label className="block text-white text-sm font-medium mb-2">
+                 ICP — Primary role *
+               </label>
+               <select
+                 required
+                 className="form-select"
+                 value={formData.icp_primary_role}
+                 onChange={(e) => handleInputChange('icp_primary_role', e.target.value)}
+               >
+                 <option value="">Select...</option>
+                 <option value="admin">Admin</option>
+                 <option value="end_user">End-user</option>
+                 <option value="technical_champion">Technical champion</option>
+                 <option value="buyer">Buyer/Decision-maker</option>
+                 <option value="finance_procurement">Finance/Procurement</option>
+                 <option value="other">Other</option>
+               </select>
+             </div>
+
+            <div>
+              <label className="block text-white text-sm font-medium mb-2">
+                Primary JTBD (Job To Be Done) for Day-1 *
+              </label>
+              <textarea
+                required
+                className="form-input"
+                rows={3}
+                value={formData.day1_jtbd}
+                onChange={(e) => handleInputChange('day1_jtbd', e.target.value)}
+                placeholder="Main task/problem the user aims to solve on day 1"
+              />
+            </div>
+
+                         <div>
+               <label className="block text-white text-sm font-medium mb-2">
+                 Pricing tier analyzed *
+               </label>
+               <select
+                 required
+                 className="form-select"
+                 value={formData.pricing_tier}
+                 onChange={(e) => handleInputChange('pricing_tier', e.target.value)}
+               >
+                 <option value="">Select...</option>
+                 <option value="free">Free</option>
+                 <option value="trial">Trial</option>
+                 <option value="starter">Starter</option>
+                 <option value="pro">Pro</option>
+                 <option value="business">Business</option>
+                 <option value="enterprise">Enterprise</option>
+               </select>
+             </div>
+
+            <div>
+              <label className="block text-white text-sm font-medium mb-2">
+                Main competitor
+              </label>
+              <input
+                type="text"
+                className="form-input"
+                value={formData.main_competitor}
+                onChange={(e) => handleInputChange('main_competitor', e.target.value)}
+                placeholder="e.g., Competitor Inc."
+              />
             </div>
           </div>
         </div>
@@ -496,84 +686,324 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
               <label className="block text-white text-sm font-medium mb-2">
                 How do new users sign up today? *
               </label>
-              <select
-                required
-                className="form-select"
-                value={formData.signupMethod}
-                onChange={(e) => handleInputChange('signupMethod', e.target.value)}
-              >
-                <option value="Email & Password">Email & Password</option>
-                <option value="Google">Google</option>
-                <option value="Invite-only">Invite-only</option>
-                <option value="Other">Other</option>
-              </select>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {[
+                  { value: 'email_password', label: 'Email & Password' },
+                  { value: 'social_google', label: 'Social login (Google)' },
+                  { value: 'social_facebook', label: 'Social login (Facebook)' },
+                  { value: 'social_linkedin', label: 'Social login (LinkedIn)' },
+                  { value: 'sso', label: 'SSO' },
+                  { value: 'invitation_only', label: 'Invitation-only' },
+                  { value: 'other', label: 'Other' }
+                ].map(option => (
+                  <label key={option.value} className="flex items-center">
+                    <input
+                      type="checkbox"
+                      className="mr-2"
+                      checked={formData.signup_methods.includes(option.value)}
+                      onChange={(e) => {
+                        const newMethods = e.target.checked
+                          ? [...formData.signup_methods, option.value]
+                          : formData.signup_methods.filter(m => m !== option.value);
+                        handleInputChange('signup_methods', newMethods);
+                      }}
+                    />
+                    <span className="text-white text-sm">{option.label}</span>
+                  </label>
+                ))}
+              </div>
             </div>
             
-            {/* Conditional field for signup method other */}
-            {formData.signupMethod === 'Other' && (
-              <div>
-                <label className="block text-white text-sm font-medium mb-2">
-                  Please describe your signup method *
-                </label>
-                <input
-                  type="text"
-                  required
-                  className="form-input"
-                  value={formData.signupMethodOther || ''}
-                  onChange={(e) => handleInputChange('signupMethodOther', e.target.value)}
-                  placeholder="Describe your signup process..."
-                />
-              </div>
-            )}
+                         <div>
+               <label className="block text-white text-sm font-medium mb-2">
+                 After signup, what do users see first? *
+               </label>
+               <select
+                 required
+                 className="form-select"
+                 value={formData.first_screen}
+                 onChange={(e) => handleInputChange('first_screen', e.target.value)}
+               >
+                 <option value="">Select...</option>
+                 <option value="walkthrough">Guided walkthrough / tutorial</option>
+                 <option value="empty_dashboard">Empty dashboard</option>
+                 <option value="welcome_page">Welcome page</option>
+                 <option value="setup_wizard">Setup wizard</option>
+                 <option value="task_checklist">Task list / checklist</option>
+                 <option value="other">Other</option>
+               </select>
+             </div>
             
+                         <div>
+               <label className="block text-white text-sm font-medium mb-2">
+                 Do you track drop-off points during onboarding? *
+               </label>
+               <select
+                 required
+                 className="form-select"
+                 value={formData.track_dropoffs}
+                 onChange={(e) => handleInputChange('track_dropoffs', e.target.value)}
+               >
+                 <option value="">Select...</option>
+                 <option value="full">Yes — full tracking</option>
+                 <option value="partial">Yes — partial tracking</option>
+                 <option value="no">No</option>
+                 <option value="not_sure">Not sure</option>
+               </select>
+             </div>
+
             <div>
               <label className="block text-white text-sm font-medium mb-2">
-                After a new user signs up, what do they see first? *
+                Activation definition (event/condition) *
               </label>
-              <select
+              <input
+                type="text"
                 required
-                className="form-select"
-                value={formData.firstTimeExperience}
-                onChange={(e) => handleInputChange('firstTimeExperience', e.target.value)}
-              >
-                <option value="A guided walkthrough or tutorial">A guided walkthrough or tutorial</option>
-                <option value="A blank/empty dashboard with a call-to-action">A blank/empty dashboard with a call-to-action</option>
-                <option value="A checklist or progress bar to complete setup">A checklist or progress bar to complete setup</option>
-                <option value="Something else (please describe)">Something else (please describe)</option>
-              </select>
+                className="form-input"
+                value={formData.activation_definition}
+                onChange={(e) => handleInputChange('activation_definition', e.target.value)}
+                placeholder="e.g., created_project & invited_user"
+              />
             </div>
-            
-            {/* Conditional field for first time experience other */}
-            {formData.firstTimeExperience === 'Something else (please describe)' && (
-              <div>
-                <label className="block text-white text-sm font-medium mb-2">
-                  Please describe what new users see first *
-                </label>
-                <input
-                  type="text"
-                  required
-                  className="form-input"
-                  value={formData.firstTimeExperienceOther || ''}
-                  onChange={(e) => handleInputChange('firstTimeExperienceOther', e.target.value)}
-                  placeholder="Describe what new users experience first..."
-                />
-              </div>
-            )}
-            
+
             <div>
               <label className="block text-white text-sm font-medium mb-2">
-                Do you track drop-off points during onboarding? *
+                Aha moment (short)
               </label>
-              <select
-                required
-                className="form-select"
-                value={formData.trackDropoff}
-                onChange={(e) => handleInputChange('trackDropoff', e.target.value)}
-              >
-                <option value="Yes">Yes</option>
-                <option value="No">No</option>
-                <option value="Not sure">Not sure</option>
-              </select>
+              <input
+                type="text"
+                className="form-input"
+                value={formData.aha_moment}
+                onChange={(e) => handleInputChange('aha_moment', e.target.value)}
+                placeholder="e.g., First report generated"
+              />
+            </div>
+
+            <div>
+              <label className="block text-white text-sm font-medium mb-2">
+                Time-to-Aha (minutes)
+              </label>
+              <input
+                type="number"
+                min={0}
+                className="form-input"
+                value={formData.time_to_aha_minutes || ''}
+                onChange={(e) => handleInputChange('time_to_aha_minutes', e.target.value ? parseInt(e.target.value) : undefined)}
+                placeholder="e.g., 12"
+              />
+            </div>
+
+            <div>
+              <label className="block text-white text-sm font-medium mb-2">
+                Blocking steps
+              </label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {[
+                  { value: 'email_verify', label: 'Email verification' },
+                  { value: 'phone_sms', label: 'Phone/SMS' },
+                  { value: 'credit_card', label: 'Credit card' },
+                  { value: 'manual_approval', label: 'Manual approval' },
+                  { value: 'paywall', label: 'Paywall' }
+                ].map(option => (
+                  <label key={option.value} className="flex items-center">
+                    <input
+                      type="checkbox"
+                      className="mr-2"
+                      checked={formData.blocking_steps?.includes(option.value) || false}
+                      onChange={(e) => {
+                        const newSteps = e.target.checked
+                          ? [...(formData.blocking_steps || []), option.value]
+                          : (formData.blocking_steps || []).filter(s => s !== option.value);
+                        handleInputChange('blocking_steps', newSteps);
+                      }}
+                    />
+                    <span className="text-white text-sm">{option.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-white text-sm font-medium mb-2">
+                Platforms
+              </label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {[
+                  { value: 'web', label: 'Web' },
+                  { value: 'ios', label: 'iOS' },
+                  { value: 'android', label: 'Android' },
+                  { value: 'extension', label: 'Extension' }
+                ].map(option => (
+                  <label key={option.value} className="flex items-center">
+                    <input
+                      type="checkbox"
+                      className="mr-2"
+                      checked={formData.platforms?.includes(option.value) || false}
+                      onChange={(e) => {
+                        const newPlatforms = e.target.checked
+                          ? [...(formData.platforms || []), option.value]
+                          : (formData.platforms || []).filter(p => p !== option.value);
+                        handleInputChange('platforms', newPlatforms);
+                      }}
+                    />
+                    <span className="text-white text-sm">{option.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-white text-sm font-medium mb-2">
+                SSO / compliance constraints
+              </label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {[
+                  { value: 'sso', label: 'SSO' },
+                  { value: 'gdpr', label: 'GDPR' },
+                  { value: 'soc2', label: 'SOC2' },
+                  { value: 'hipaa', label: 'HIPAA' },
+                  { value: 'other', label: 'Other' }
+                ].map(option => (
+                  <label key={option.value} className="flex items-center">
+                    <input
+                      type="checkbox"
+                      className="mr-2"
+                      checked={formData.compliance_constraints?.includes(option.value) || false}
+                      onChange={(e) => {
+                        const newConstraints = e.target.checked
+                          ? [...(formData.compliance_constraints || []), option.value]
+                          : (formData.compliance_constraints || []).filter(c => c !== option.value);
+                        handleInputChange('compliance_constraints', newConstraints);
+                      }}
+                    />
+                    <span className="text-white text-sm">{option.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Step 2.5: Analytics & Access */}
+      {currentStep === 2.5 && (
+        <div className="card">
+          <h3 className="text-xl font-semibold text-white mb-4">Analytics & Access</h3>
+          <div className="space-y-4">
+                         <div>
+               <label className="block text-white text-sm font-medium mb-2">
+                 Analytics tool *
+               </label>
+               <select
+                 required
+                 className="form-select"
+                 value={formData.analytics_tool}
+                 onChange={(e) => handleInputChange('analytics_tool', e.target.value)}
+               >
+                 <option value="">Select...</option>
+                 <option value="ga4">GA4</option>
+                 <option value="amplitude">Amplitude</option>
+                 <option value="mixpanel">Mixpanel</option>
+                 <option value="heap">Heap</option>
+                 <option value="in_house">In-house</option>
+                 <option value="other">Other</option>
+               </select>
+             </div>
+
+            <div>
+              <label className="block text-white text-sm font-medium mb-2">
+                Key events available
+              </label>
+              <input
+                type="text"
+                className="form-input"
+                value={formData.key_events?.join(', ') || ''}
+                onChange={(e) => handleInputChange('key_events', e.target.value.split(',').map(s => s.trim()).filter(s => s))}
+                placeholder="signup, verified, tutorial_completed, aha_event, activated, invited_user, payment_started"
+              />
+            </div>
+
+            <div>
+              <label className="block text-white text-sm font-medium mb-2">
+                Signups/week
+              </label>
+              <input
+                type="number"
+                min={0}
+                className="form-input"
+                value={formData.signups_per_week || ''}
+                onChange={(e) => handleInputChange('signups_per_week', e.target.value ? parseInt(e.target.value) : undefined)}
+              />
+            </div>
+
+            <div>
+              <label className="block text-white text-sm font-medium mb-2">
+                MAU
+              </label>
+              <input
+                type="number"
+                min={0}
+                className="form-input"
+                value={formData.mau || ''}
+                onChange={(e) => handleInputChange('mau', e.target.value ? parseInt(e.target.value) : undefined)}
+              />
+            </div>
+
+            <div>
+              <label className="block text-white text-sm font-medium mb-2">
+                % mobile
+              </label>
+              <input
+                type="number"
+                min={0}
+                max={100}
+                className="form-input"
+                value={formData.mobile_percent || ''}
+                onChange={(e) => handleInputChange('mobile_percent', e.target.value ? parseInt(e.target.value) : undefined)}
+              />
+            </div>
+
+            <div>
+              <label className="block text-white text-sm font-medium mb-2">
+                Read-only access / demo
+              </label>
+              <div className="space-y-2">
+                <label className="flex items-center">
+                  <input
+                    type="radio"
+                    name="readonly_access"
+                    value="yes"
+                    checked={formData.readonly_access === 'yes'}
+                    onChange={(e) => handleInputChange('readonly_access', e.target.value)}
+                    className="mr-2"
+                  />
+                  <span className="text-white text-sm">Yes</span>
+                </label>
+                <label className="flex items-center">
+                  <input
+                    type="radio"
+                    name="readonly_access"
+                    value="no"
+                    checked={formData.readonly_access === 'no'}
+                    onChange={(e) => handleInputChange('readonly_access', e.target.value)}
+                    className="mr-2"
+                  />
+                  <span className="text-white text-sm">No</span>
+                </label>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-white text-sm font-medium mb-2">
+                Access instructions
+              </label>
+              <textarea
+                className="form-input"
+                rows={3}
+                value={formData.access_instructions}
+                onChange={(e) => handleInputChange('access_instructions', e.target.value)}
+                placeholder="How to access demo or read-only environment"
+              />
             </div>
           </div>
         </div>
@@ -584,75 +1014,233 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
         <div className="card">
           <h3 className="text-xl font-semibold text-white mb-4">Goal & Metrics</h3>
           <div className="space-y-4">
+                         <div>
+               <label className="block text-white text-sm font-medium mb-2">
+                 Main goal for this audit *
+               </label>
+               <select
+                 required
+                 className="form-select"
+                 value={formData.main_goal}
+                 onChange={(e) => handleInputChange('main_goal', e.target.value)}
+               >
+                 <option value="">Select...</option>
+                 <option value="activation_rate">Activation rate</option>
+                 <option value="time_to_aha">Time-to-Aha</option>
+                 <option value="trial_to_paid">Trial→Paid</option>
+                 <option value="retention_30">30-day retention</option>
+                 <option value="retention_90">90-day retention</option>
+                 <option value="other">Other</option>
+               </select>
+             </div>
+            
             <div>
               <label className="block text-white text-sm font-medium mb-2">
-                Main goal for this audit *
+                Do you know your churn rate?
               </label>
               <select
-                required
                 className="form-select"
-                value={formData.mainGoal}
-                onChange={(e) => handleInputChange('mainGoal', e.target.value)}
+                value={formData.know_churn_rate || ''}
+                onChange={(e) => handleInputChange('know_churn_rate', e.target.value)}
               >
-                <option value="Activation">Activation</option>
-                <option value="Conversion">Conversion</option>
-                <option value="Reduce churn">Reduce churn</option>
-                <option value="Other">Other</option>
+                <option value="">Select...</option>
+                <option value="yes">Yes</option>
+                <option value="no">No</option>
+                <option value="not_sure">Not sure</option>
               </select>
             </div>
             
             <div>
               <label className="block text-white text-sm font-medium mb-2">
-                Do you know your churn rate? *
+                When does churn usually happen?
               </label>
               <select
-                required
                 className="form-select"
-                value={formData.knowChurnRate}
-                onChange={(e) => handleInputChange('knowChurnRate', e.target.value)}
+                value={formData.churn_when || ''}
+                onChange={(e) => handleInputChange('churn_when', e.target.value)}
               >
-                <option value="Yes">Yes</option>
-                <option value="No">No</option>
-                <option value="Not yet">Not yet</option>
+                <option value="">Select...</option>
+                <option value="during_onboarding">During onboarding</option>
+                <option value="first_week">First week</option>
+                <option value="first_month">First month</option>
+                <option value="one_to_three_months">1–3 months</option>
+                <option value="after_three_months">After 3 months</option>
+                <option value="not_sure">Not sure</option>
               </select>
+            </div>
+
+            <div>
+              <label className="block text-white text-sm font-medium mb-2">
+                Target improvement (%)
+              </label>
+              <input
+                type="number"
+                min={0}
+                max={100}
+                className="form-input"
+                value={formData.target_improvement_percent || ''}
+                onChange={(e) => handleInputChange('target_improvement_percent', e.target.value ? parseInt(e.target.value) : undefined)}
+                placeholder="e.g., 15"
+              />
+            </div>
+
+            <div>
+              <label className="block text-white text-sm font-medium mb-2">
+                Time horizon
+              </label>
+              <select
+                className="form-select"
+                value={formData.time_horizon || ''}
+                onChange={(e) => handleInputChange('time_horizon', e.target.value)}
+              >
+                <option value="">Select...</option>
+                <option value="4_weeks">4 weeks</option>
+                <option value="8_weeks">8 weeks</option>
+                <option value="12_weeks">12 weeks</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-white text-sm font-medium mb-2">
+                Main segments
+              </label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {[
+                  { value: 'self_serve', label: 'Self-serve' },
+                  { value: 'smb_admin', label: 'SMB admin' },
+                  { value: 'end_user', label: 'End-user' },
+                  { value: 'technical_champion', label: 'Technical champion' },
+                  { value: 'buyer', label: 'Buyer' },
+                  { value: 'other', label: 'Other' }
+                ].map(option => (
+                  <label key={option.value} className="flex items-center">
+                    <input
+                      type="checkbox"
+                      className="mr-2"
+                      checked={formData.main_segments?.includes(option.value) || false}
+                      onChange={(e) => {
+                        const newSegments = e.target.checked
+                          ? [...(formData.main_segments || []), option.value]
+                          : (formData.main_segments || []).filter(s => s !== option.value);
+                        handleInputChange('main_segments', newSegments);
+                      }}
+                    />
+                    <span className="text-white text-sm">{option.label}</span>
+                  </label>
+                ))}
+              </div>
             </div>
             
             <div>
               <label className="block text-white text-sm font-medium mb-2">
-                When does churn usually happen? *
-              </label>
-              <select
-                required
-                className="form-select"
-                value={formData.churnTiming}
-                onChange={(e) => handleInputChange('churnTiming', e.target.value)}
-              >
-                <option value="24h">24h</option>
-                <option value="1 week">1 week</option>
-                <option value="1 month">1 month</option>
-                <option value="Longer">Longer</option>
-                <option value="Not sure">Not sure</option>
-              </select>
-            </div>
-            
-            <div>
-              <label className="block text-white text-sm font-medium mb-2">
-                Any specific concerns? (Optional)
+                Specific constraints/risks
               </label>
               <textarea
                 className="form-input"
                 rows={3}
-                value={formData.specificConcerns}
-                onChange={(e) => handleInputChange('specificConcerns', e.target.value)}
-                placeholder="Tell us about any specific issues you're facing..."
+                value={formData.constraints}
+                onChange={(e) => handleInputChange('constraints', e.target.value)}
+                placeholder="Limitations or risks to consider"
               />
             </div>
           </div>
         </div>
       )}
 
-      {/* Step 4: Delivery */}
+      {/* Step 4: Optional Evidence */}
       {currentStep === 4 && (
+        <div className="card">
+          <h3 className="text-xl font-semibold text-white mb-4">Optional Evidence</h3>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-white text-sm font-medium mb-2">
+                Feature flags / A/B infrastructure available
+              </label>
+              <select
+                className="form-select"
+                value={formData.feature_flags || ''}
+                onChange={(e) => handleInputChange('feature_flags', e.target.value)}
+              >
+                <option value="">Select...</option>
+                <option value="yes">Yes</option>
+                <option value="no">No</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-white text-sm font-medium mb-2">
+                A/B or feature flag tool (if any)
+              </label>
+              <input
+                type="text"
+                className="form-input"
+                value={formData.ab_tool}
+                onChange={(e) => handleInputChange('ab_tool', e.target.value)}
+                placeholder="e.g., LaunchDarkly, Optimizely"
+              />
+            </div>
+
+            <div>
+              <label className="block text-white text-sm font-medium mb-2">
+                Languages / regions
+              </label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {[
+                  { value: 'english', label: 'English' },
+                  { value: 'spanish', label: 'Spanish' },
+                  { value: 'french', label: 'French' },
+                  { value: 'german', label: 'German' },
+                  { value: 'other', label: 'Other' }
+                ].map(option => (
+                  <label key={option.value} className="flex items-center">
+                    <input
+                      type="checkbox"
+                      className="mr-2"
+                      checked={formData.languages?.includes(option.value) || false}
+                      onChange={(e) => {
+                        const newLanguages = e.target.checked
+                          ? [...(formData.languages || []), option.value]
+                          : (formData.languages || []).filter(l => l !== option.value);
+                        handleInputChange('languages', newLanguages);
+                      }}
+                    />
+                    <span className="text-white text-sm">{option.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-white text-sm font-medium mb-2">
+                Current empty states (screenshots or URLs)
+              </label>
+              <textarea
+                className="form-input"
+                rows={3}
+                value={formData.empty_states_urls}
+                onChange={(e) => handleInputChange('empty_states_urls', e.target.value)}
+                placeholder="Links to empty state screenshots or descriptions"
+              />
+            </div>
+
+            <div>
+              <label className="block text-white text-sm font-medium mb-2">
+                Push/in-app notifications (provider)
+              </label>
+              <input
+                type="text"
+                className="form-input"
+                value={formData.notifications_provider}
+                onChange={(e) => handleInputChange('notifications_provider', e.target.value)}
+                placeholder="e.g., OneSignal, Braze"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Step 5: Delivery */}
+      {currentStep === 5 && (
         <div className="card">
           <h3 className="text-xl font-semibold text-white mb-4">Delivery</h3>
           <div className="space-y-4">
@@ -664,30 +1252,45 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
                 type="email"
                 required
                 className="form-input"
-                value={formData.email}
-                onChange={(e) => handleInputChange('email', e.target.value)}
+                value={formData.report_email}
+                onChange={(e) => handleInputChange('report_email', e.target.value)}
                 placeholder="your@email.com"
               />
             </div>
             
             <div>
               <label className="block text-white text-sm font-medium mb-2">
-                Preferred format *
+                Include benchmarks
               </label>
-              <select
-                required
-                className="form-select"
-                value={formData.preferredFormat}
-                onChange={(e) => handleInputChange('preferredFormat', e.target.value)}
-              >
-                <option value="Google Doc">Google Doc</option>
-                <option value="Google Slides">Google Slides</option>
-              </select>
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  className="mr-2"
+                  checked={formData.include_benchmarks}
+                  onChange={(e) => handleInputChange('include_benchmarks', e.target.checked)}
+                />
+                <span className="text-white text-sm">Include industry benchmarks in the report</span>
+              </label>
+            </div>
+
+            <div>
+              <label className="block text-white text-sm font-medium mb-2">
+                Do you want an A/B experiment plan?
+              </label>
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  className="mr-2"
+                  checked={formData.want_ab_plan}
+                  onChange={(e) => handleInputChange('want_ab_plan', e.target.checked)}
+                />
+                <span className="text-white text-sm">Include A/B testing recommendations</span>
+              </label>
             </div>
             
             <div>
               <label className="block text-white text-sm font-medium mb-2">
-                Upload screenshots (Optional)
+                Upload screenshots (optional)
               </label>
               <input
                 type="file"
@@ -700,8 +1303,6 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
                 Upload screenshots of your onboarding flow to help us provide more specific recommendations.
                 <br />
                 <strong>Limit: 10MB total</strong> • {uploadedFiles.length} file(s) uploaded • {Math.round(totalFileSize / 1024 / 1024 * 100) / 100}MB used
-                <br />
-                <span className="text-yellow-300">Debug: State - Files: {uploadedFiles.length}, Size: {totalFileSize} bytes</span>
               </p>
               {uploadedFiles.length > 0 && (
                 <div className="mt-2">
@@ -728,13 +1329,32 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
                   </ul>
                 </div>
               )}
-              <div className="mt-4 p-3 bg-blue-900/30 border border-blue-500/30 rounded-lg">
-                <p className="text-xs text-blue-200">
-                  <strong>Need to send more files?</strong> If you have additional screenshots or documents to share, 
-                  please send them to <a href="mailto:luisdaniel883gmail.com" className="text-yellow-300 hover:text-yellow-200 underline">luisdaniel883gmail.com</a> 
-                  with your product name in the subject line.
-                </p>
-              </div>
+            </div>
+
+            <div>
+              <label className="block text-white text-sm font-medium mb-2">
+                Walkthrough video (Loom)
+              </label>
+              <input
+                type="url"
+                className="form-input"
+                value={formData.walkthrough_url}
+                onChange={(e) => handleInputChange('walkthrough_url', e.target.value)}
+                placeholder="https://www.loom.com/share/..."
+              />
+            </div>
+
+            <div>
+              <label className="block text-white text-sm font-medium mb-2">
+                Demo account / sandbox
+              </label>
+              <input
+                type="text"
+                className="form-input"
+                value={formData.demo_account}
+                onChange={(e) => handleInputChange('demo_account', e.target.value)}
+                placeholder="Demo credentials or sandbox access"
+              />
             </div>
           </div>
         </div>
@@ -752,7 +1372,7 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
           </button>
         )}
         
-        {currentStep < 4 ? (
+        {currentStep < 5 ? (
           <button
             type="button"
             onClick={nextStep}
@@ -761,18 +1381,18 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
             Next
           </button>
         ) : (
-                     <button
-             type="submit"
-             disabled={isSubmitting || uploadProgress.isUploading}
-             className="btn-primary ml-auto"
-           >
-             {uploadProgress.isUploading 
-               ? `Processing Files... (${uploadProgress.currentIndex}/${uploadProgress.totalFiles})`
-               : isSubmitting 
-                 ? 'Submitting...' 
-                 : 'Submit Audit Request'
-             }
-           </button>
+          <button
+            type="submit"
+            disabled={isSubmitting || uploadProgress.isUploading}
+            className="btn-primary ml-auto"
+          >
+            {uploadProgress.isUploading 
+              ? `Processing Files... (${uploadProgress.currentIndex}/${uploadProgress.totalFiles})`
+              : isSubmitting 
+                ? 'Submitting...' 
+                : 'Submit Audit Request'
+            }
+          </button>
         )}
       </div>
     </form>
