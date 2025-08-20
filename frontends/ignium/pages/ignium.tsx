@@ -317,7 +317,7 @@ export default function Ignium() {
       <footer className="py-8 px-4 border-t border-white/10">
         <div className="max-w-6xl mx-auto text-center">
           <p className="text-gray-400">
-            © 2024 Ignium. Built by UayLabs.
+            © 2025 Ignium. Built by UayLabs.
           </p>
         </div>
       </footer>

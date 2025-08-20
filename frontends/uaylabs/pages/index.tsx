@@ -147,7 +147,7 @@ export default function UayLabsLanding() {
       <footer className="py-8 px-4 border-t border-white/10">
         <div className="container mx-auto text-center">
           <p className="text-gray-400">
-            © 2024 UayLabs. Todos los derechos reservados.
+            © 2025 UayLabs. Todos los derechos reservados.
           </p>
         </div>
       </footer>

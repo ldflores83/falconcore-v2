@@ -140,9 +140,12 @@ export const addToWaitlist = async (req: Request, res: Response) => {
 
     const db = getFirestore();
 
+    // Determinar la colección basada en el projectId
+    const collectionName = `waitlist_${projectId}`;
+    
     // Verificar si ya existe en waitlist
     const existingEntry = await db
-      .collection('waitlist_onboarding_audit')
+      .collection(collectionName)
       .where('email', '==', email)
       .where('projectId', '==', projectId)
       .get();
@@ -164,7 +167,7 @@ export const addToWaitlist = async (req: Request, res: Response) => {
       status: 'waiting'
     };
 
-    const docRef = await db.collection('waitlist_onboarding_audit').add(waitlistData);
+    const docRef = await db.collection(collectionName).add(waitlistData);
     
     console.log('✅ Waitlist entry added:', {
       entryId: docRef.id,

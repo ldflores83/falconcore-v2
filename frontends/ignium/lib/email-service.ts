@@ -88,7 +88,7 @@ export class EmailService {
             </div>
             
             <div class="footer">
-              <p>© 2024 Ignium. Built by UayLabs.</p>
+              <p>© 2025 Ignium. Built by UayLabs.</p>
               <p>${isEnglish ? 'Questions? Reply to this email.' : '¿Preguntas? Responde a este email.'}</p>
             </div>
           </div>
