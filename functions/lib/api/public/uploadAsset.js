@@ -37,6 +37,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.uploadAsset = void 0;
 const storage_1 = require("../../services/storage");
 const admin = __importStar(require("firebase-admin"));
+const configService_1 = require("../../services/configService");
 // Función para obtener Firestore de forma lazy
 const getFirestore = () => {
     if (!admin.apps.length) {
@@ -74,25 +75,51 @@ const uploadAsset = async (req, res) => {
                 message: `Missing required fields: ${missingFields.join(', ')}`
             });
         }
-        // Validar límite de tamaño total (10MB) y archivos individuales (10MB)
-        const totalSize = files.reduce((sum, file) => sum + file.size, 0);
-        const maxTotalSize = 10 * 1024 * 1024; // 10MB total
-        const maxIndividualSize = 10 * 1024 * 1024; // 10MB por archivo
-        // Validar archivos individuales
-        const oversizedFiles = files.filter(file => file.size > maxIndividualSize);
-        if (oversizedFiles.length > 0) {
-            const fileNames = oversizedFiles.map(f => f.filename).join(', ');
+        // Validar que el proyecto esté configurado
+        const projectIdFinal = projectId || 'onboardingaudit';
+        if (!configService_1.ConfigService.isProductConfigured(projectIdFinal)) {
             return res.status(400).json({
                 success: false,
-                message: `File(s) exceed 10MB limit: ${fileNames}. Please compress or split large files.`
+                message: "Invalid project configuration"
+            });
+        }
+        // Validar que las características necesarias estén habilitadas
+        if (!configService_1.ConfigService.isFeatureEnabled(projectIdFinal, 'fileUpload')) {
+            return res.status(400).json({
+                success: false,
+                message: "File upload is not enabled for this project"
+            });
+        }
+        // Obtener límites dinámicos del proyecto
+        const maxFileSize = configService_1.ConfigService.getMaxFileSize(projectIdFinal);
+        const maxFilesPerUpload = configService_1.ConfigService.getMaxFilesPerUpload(projectIdFinal);
+        // Validar límite de archivos por upload
+        if (files.length > maxFilesPerUpload) {
+            return res.status(400).json({
+                success: false,
+                message: `Maximum ${maxFilesPerUpload} files allowed per upload. You're trying to upload ${files.length} files.`
+            });
+        }
+        // Validar límite de tamaño total y archivos individuales
+        const totalSize = files.reduce((sum, file) => sum + file.size, 0);
+        const maxTotalSize = maxFileSize * maxFilesPerUpload; // Tamaño total máximo
+        // Validar archivos individuales
+        const oversizedFiles = files.filter(file => file.size > maxFileSize);
+        if (oversizedFiles.length > 0) {
+            const fileNames = oversizedFiles.map(f => f.filename).join(', ');
+            const maxFileSizeMB = Math.round(maxFileSize / 1024 / 1024 * 100) / 100;
+            return res.status(400).json({
+                success: false,
+                message: `File(s) exceed ${maxFileSizeMB}MB limit: ${fileNames}. Please compress or split large files.`
             });
         }
         // Validar tamaño total
         if (totalSize > maxTotalSize) {
             const totalMB = Math.round(totalSize / 1024 / 1024 * 100) / 100;
+            const maxTotalSizeMB = Math.round(maxTotalSize / 1024 / 1024 * 100) / 100;
             return res.status(400).json({
                 success: false,
-                message: `Total file size (${totalMB}MB) exceeds 10MB limit. Please reduce file sizes or upload fewer files.`
+                message: `Total file size (${totalMB}MB) exceeds ${maxTotalSizeMB}MB limit. Please reduce file sizes or upload fewer files.`
             });
         }
         console.log('File upload received:', {
@@ -123,7 +150,8 @@ const uploadAsset = async (req, res) => {
                 // Generar ruta única para el archivo en Cloud Storage
                 const filePath = `submissions/${submissionId}/attachments/${Date.now()}_${file.filename}`;
                 // Subir archivo a Cloud Storage
-                const storageUrl = await (0, storage_1.uploadToStorage)('falconcore-onboardingaudit-uploads', filePath, contentBuffer, file.mimeType);
+                const storageBucket = configService_1.ConfigService.getStorageBucket(projectIdFinal);
+                const storageUrl = await (0, storage_1.uploadToStorage)(storageBucket, filePath, contentBuffer, file.mimeType);
                 uploadedFiles.push({
                     filename: file.filename,
                     filePath: filePath,
@@ -140,7 +168,8 @@ const uploadAsset = async (req, res) => {
                 });
             }
             // Actualizar Firestore con las referencias de los archivos
-            const docRef = db.collection('onboardingaudit_submissions').doc(submissionId);
+            const collectionName = configService_1.ConfigService.getCollectionName(projectIdFinal, 'submissions');
+            const docRef = db.collection(collectionName).doc(submissionId);
             await docRef.update({
                 hasAttachments: true,
                 attachments: uploadedFiles,

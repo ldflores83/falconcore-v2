@@ -2,7 +2,7 @@ module.exports = {
   output: 'export',
   trailingSlash: true,
   distDir: '../uaylabs/out/ld',
-  assetPrefix: './',
-  basePath: '',
+  assetPrefix: '/ld/',
+  basePath: '/ld',
   images: { unoptimized: true }
 }

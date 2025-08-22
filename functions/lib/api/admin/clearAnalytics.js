@@ -36,6 +36,7 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.clearAnalytics = void 0;
 const admin = __importStar(require("firebase-admin"));
+const configService_1 = require("../../services/configService");
 // Función para obtener Firestore de forma lazy
 const getFirestore = () => {
     if (!admin.apps.length) {
@@ -55,6 +56,20 @@ const clearAnalytics = async (req, res) => {
             return res.status(400).json({
                 success: false,
                 message: "Missing projectId parameter"
+            });
+        }
+        // Validar que el proyecto esté configurado
+        if (!configService_1.ConfigService.isProductConfigured(projectId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid project configuration"
+            });
+        }
+        // Validar que las características necesarias estén habilitadas
+        if (!configService_1.ConfigService.isFeatureEnabled(projectId, 'analytics')) {
+            return res.status(400).json({
+                success: false,
+                message: "Analytics is not enabled for this project"
             });
         }
         // Verificar que el userId corresponde al email autorizado

@@ -1,18 +1,23 @@
 import React from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/router';
 
 const navigation = [
-  { name: 'Dashboard', href: '/', icon: '📊' },
-  { name: 'Productos', href: '/products', icon: '🚀' },
-  { name: 'Analytics', href: '/analytics', icon: '📈' },
-  { name: 'Waitlists', href: '/waitlists', icon: '📝' },
-  { name: 'Usuarios', href: '/users', icon: '👥' },
-  { name: 'Configuración', href: '/settings', icon: '⚙️' },
+  { name: 'Dashboard', href: '/ld/', icon: '📊' },
+  { name: 'Productos', href: '/ld/products/', icon: '🚀' },
+  { name: 'Analytics', href: '/ld/analytics/', icon: '📈' },
+  { name: 'Waitlists', href: '/ld/waitlists/', icon: '📝' },
+  { name: 'Usuarios', href: '/ld/users/', icon: '👥' },
+  { name: 'Configuración', href: '/ld/settings/', icon: '⚙️' },
 ];
 
 export default function Sidebar() {
-  const router = useRouter();
+  const getCurrentPath = () => {
+    if (typeof window !== 'undefined') {
+      return window.location.pathname;
+    }
+    return '/';
+  };
+
+  const currentPath = getCurrentPath();
 
   return (
     <div className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col">
@@ -23,12 +28,14 @@ export default function Sidebar() {
         <nav className="mt-5 flex flex-1 flex-col divide-y divide-gray-700">
           <div className="space-y-1">
             {navigation.map((item) => {
-              const isActive = router.pathname === item.href;
+              const isActive = currentPath === item.href || 
+                             (currentPath === '/ld/' && item.href === '/ld/') ||
+                             (currentPath === '/ld/index.html' && item.href === '/ld/');
               return (
-                <Link
+                <button
                   key={item.name}
-                  href={item.href}
-                  className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md ${
+                  onClick={() => window.location.href = item.href}
+                  className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md w-full text-left ${
                     isActive
                       ? 'bg-ld-primary text-white'
                       : 'text-gray-300 hover:bg-gray-700 hover:text-white'
@@ -36,7 +43,7 @@ export default function Sidebar() {
                 >
                   <span className="mr-3 text-lg">{item.icon}</span>
                   {item.name}
-                </Link>
+                </button>
               );
             })}
           </div>

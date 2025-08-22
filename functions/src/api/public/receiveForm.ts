@@ -3,6 +3,8 @@
 import { Request, Response } from "express";
 import { uploadToStorage } from "../../services/storage";
 import * as admin from 'firebase-admin';
+import { ConfigService } from "../../services/configService";
+import { generateFirestoreKey } from "../../utils/hash";
 
 // Función para obtener Firestore de forma lazy
 const getFirestore = () => {
@@ -122,6 +124,22 @@ export const receiveForm = async (req: Request, res: Response) => {
     const projectIdFinal = projectId || 'onboardingaudit';
     const clientIdFinal = clientId || formData.report_email.split('@')[0];
 
+    // Validar que el proyecto esté configurado
+    if (!ConfigService.isProductConfigured(projectIdFinal)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid project configuration"
+      });
+    }
+
+    // Validar que las características necesarias estén habilitadas
+    if (!ConfigService.isFeatureEnabled(projectIdFinal, 'formSubmission')) {
+      return res.status(400).json({
+        success: false,
+        message: "Form submission is not enabled for this project"
+      });
+    }
+
     console.log('📝 Form submission received:', {
       submissionId,
       email: formData.report_email,
@@ -147,7 +165,8 @@ export const receiveForm = async (req: Request, res: Response) => {
         updatedAt: new Date()
       };
 
-      const docRef = await db.collection('onboardingaudit_submissions').add(submissionData);
+      const collectionName = ConfigService.getCollectionName(projectIdFinal, 'submissions');
+      const docRef = await db.collection(collectionName).add(submissionData);
       
       console.log('✅ Submission saved to Firestore:', docRef.id);
 
@@ -160,8 +179,9 @@ export const receiveForm = async (req: Request, res: Response) => {
       const contentBuffer = Buffer.from(documentContent, 'utf-8');
       
       const storagePath = `submissions/${docRef.id}/${fileName}`;
+      const storageBucket = ConfigService.getStorageBucket(projectIdFinal);
       const storageUrl = await uploadToStorage(
-        'falconcore-onboardingaudit-uploads',
+        storageBucket,
         storagePath,
         contentBuffer,
         'text/markdown'

@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import { useLanguage } from '../lib/useLanguage';
 import HeroSection from '../components/HeroSection';
 import WaitlistForm from '../components/WaitlistForm';
+import { createAnalyticsTracker } from '../lib/analytics';
 
 export default function Ahau() {
   const { content, language, isLoading } = useLanguage();
@@ -10,13 +11,35 @@ export default function Ahau() {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
 
+  // Initialize analytics tracker
+  useEffect(() => {
+    const tracker = createAnalyticsTracker('ahau');
+    tracker.trackPageVisit('ahau-landing');
+
+    // Track page exit
+    const handleBeforeUnload = () => {
+      tracker.trackPageExit();
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, []);
+
   const handleCTAClick = () => {
+    // Track CTA click
+    const tracker = createAnalyticsTracker('ahau');
+    tracker.trackPageVisit('cta-click');
+    
     setShowWaitlist(true);
     document.getElementById('waitlist-section')?.scrollIntoView({ behavior: 'smooth' });
   };
 
   const handleWaitlistSubmit = (success: boolean, message: string) => {
     if (success) {
+      // Track successful waitlist submission
+      const tracker = createAnalyticsTracker('ahau');
+      tracker.trackPageVisit('waitlist-success');
+      
       setSuccessMessage(message);
       setShowSuccessModal(true);
     } else {

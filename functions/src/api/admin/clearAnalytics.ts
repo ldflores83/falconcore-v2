@@ -2,6 +2,7 @@
 
 import { Request, Response } from 'express';
 import * as admin from 'firebase-admin';
+import { ConfigService } from '../../services/configService';
 
 // Función para obtener Firestore de forma lazy
 const getFirestore = () => {
@@ -25,6 +26,22 @@ export const clearAnalytics = async (req: Request, res: Response) => {
       return res.status(400).json({
         success: false,
         message: "Missing projectId parameter"
+      });
+    }
+
+    // Validar que el proyecto esté configurado
+    if (!ConfigService.isProductConfigured(projectId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid project configuration"
+      });
+    }
+
+    // Validar que las características necesarias estén habilitadas
+    if (!ConfigService.isFeatureEnabled(projectId, 'analytics')) {
+      return res.status(400).json({
+        success: false,
+        message: "Analytics is not enabled for this project"
       });
     }
 

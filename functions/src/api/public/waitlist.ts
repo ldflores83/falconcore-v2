@@ -2,6 +2,7 @@
 
 import { Request, Response } from "express";
 import * as admin from 'firebase-admin';
+import { ConfigService } from "../../services/configService";
 
 // Función para obtener Firestore de forma lazy
 const getFirestore = () => {
@@ -15,12 +16,15 @@ const getFirestore = () => {
 
 // Tipos para el waitlist
 interface WaitlistEntry {
-  productName: string;
-  website: string;
   email: string;
   projectId: string;
+  name?: string;
+  productName?: string;
+  website?: string;
+  language?: string;
   timestamp: Date;
   status: 'waiting' | 'notified' | 'converted';
+  [key: string]: any; // Permitir campos adicionales
 }
 
 interface CheckLimitRequest {
@@ -36,10 +40,13 @@ interface CheckLimitResponse {
 }
 
 interface AddToWaitlistRequest {
-  productName: string;
-  website: string;
   email: string;
   projectId: string;
+  name?: string;
+  productName?: string;
+  website?: string;
+  language?: string;
+  [key: string]: any; // Permitir campos adicionales
 }
 
 interface AddToWaitlistResponse {
@@ -68,11 +75,29 @@ export const checkLimit = async (req: Request, res: Response) => {
     }
 
     const db = getFirestore();
+    
+    // Validar que el proyecto esté configurado
+    if (!ConfigService.isProductConfigured(projectId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid project configuration"
+      });
+    }
+
+    // Validar que las características necesarias estén habilitadas
+    if (!ConfigService.isFeatureEnabled(projectId, 'waitlist')) {
+      return res.status(400).json({
+        success: false,
+        message: "Waitlist is not enabled for this project"
+      });
+    }
+
     const limit = 6; // Límite configurable
 
     // Contar submissions activas (pending, synced, in_progress)
+    const collectionName = ConfigService.getCollectionName(projectId, 'submissions');
     const submissionsSnapshot = await db
-      .collection('onboardingaudit_submissions')
+      .collection(collectionName)
       .where('projectId', '==', projectId)
       .where('status', 'in', ['pending', 'synced', 'in_progress'])
       .get();
@@ -119,13 +144,13 @@ export const addToWaitlist = async (req: Request, res: Response) => {
   });
 
   try {
-    const { productName, website, email, projectId }: AddToWaitlistRequest = req.body;
+    const { email, projectId, name, productName, website, language, ...additionalFields }: AddToWaitlistRequest = req.body;
 
-    // Validaciones
-    if (!productName || !website || !email || !projectId) {
+    // Validaciones - solo email y projectId son obligatorios
+    if (!email || !projectId) {
       return res.status(400).json({
         success: false,
-        message: "Missing required fields: productName, website, email, projectId"
+        message: "Missing required fields: email, projectId"
       });
     }
 
@@ -140,8 +165,24 @@ export const addToWaitlist = async (req: Request, res: Response) => {
 
     const db = getFirestore();
 
+    // Validar que el proyecto esté configurado
+    if (!ConfigService.isProductConfigured(projectId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid project configuration"
+      });
+    }
+
+    // Validar que las características necesarias estén habilitadas
+    if (!ConfigService.isFeatureEnabled(projectId, 'waitlist')) {
+      return res.status(400).json({
+        success: false,
+        message: "Waitlist is not enabled for this project"
+      });
+    }
+
     // Determinar la colección basada en el projectId
-    const collectionName = `waitlist_${projectId}`;
+    const collectionName = ConfigService.getCollectionName(projectId, 'waitlist');
     
     // Verificar si ya existe en waitlist
     const existingEntry = await db
@@ -157,14 +198,17 @@ export const addToWaitlist = async (req: Request, res: Response) => {
       });
     }
 
-    // Crear entrada en waitlist
+    // Crear entrada en waitlist con todos los campos disponibles
     const waitlistData: WaitlistEntry = {
-      productName,
-      website,
       email,
       projectId,
       timestamp: new Date(),
-      status: 'waiting'
+      status: 'waiting',
+      ...(name && { name }),
+      ...(productName && { productName }),
+      ...(website && { website }),
+      ...(language && { language }),
+      ...additionalFields // Incluir cualquier campo adicional
     };
 
     const docRef = await db.collection(collectionName).add(waitlistData);

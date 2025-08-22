@@ -97,6 +97,20 @@ export class AdminAPI {
     const response = await api.get('/admin/recent-activity', { params });
     return response.data;
   }
+
+  // Obtener configuración de un producto
+  async getProductConfig(productId: string): Promise<any> {
+    const response = await api.post('/admin/product-config', {
+      projectId: productId
+    });
+    return response.data.config;
+  }
+
+  // Obtener configuración de todos los productos
+  async getAllProductConfigs(): Promise<any[]> {
+    const response = await api.get('/admin/all-product-configs');
+    return response.data.configs || [];
+  }
 }
 
 export default new AdminAPI();

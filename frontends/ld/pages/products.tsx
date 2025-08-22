@@ -100,7 +100,7 @@ export default function Products() {
                     <p className="text-gray-600 mt-1">{product.description}</p>
                     <div className="flex items-center space-x-4 mt-2 text-sm text-gray-500">
                       <span>ID: {product.id}</span>
-                      <span>Creado: {new Date(product.createdAt).toLocaleDateString()}</span>
+                      <span>Actualizado: {new Date(product.lastUpdated).toLocaleDateString()}</span>
                     </div>
                   </div>
                   <span className={`status-badge ${getStatusColor(product.status)}`}>
@@ -130,14 +130,23 @@ export default function Products() {
                 )}
 
                 <div className="flex space-x-3 mt-4 pt-4 border-t border-gray-200">
-                  <button className="btn-primary text-sm">
+                  <button 
+                    onClick={() => window.location.href = `/ld/analytics/?product=${product.id}`}
+                    className="btn-primary text-sm hover:bg-blue-600 transition-colors"
+                  >
                     Ver Analytics
                   </button>
-                  <button className="btn-secondary text-sm">
+                  <button 
+                    onClick={() => window.location.href = `/ld/waitlists/?product=${product.id}`}
+                    className="btn-secondary text-sm hover:bg-purple-600 transition-colors"
+                  >
                     Gestionar Waitlist
                   </button>
-                  <button className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 px-4 rounded-lg text-sm transition-colors">
-                    Configurar
+                  <button 
+                    onClick={() => window.open(product.frontendUrl, '_blank')}
+                    className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 px-4 rounded-lg text-sm transition-colors"
+                  >
+                    Ver Producto
                   </button>
                 </div>
               </div>

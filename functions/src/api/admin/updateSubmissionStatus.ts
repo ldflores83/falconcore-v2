@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import * as admin from 'firebase-admin';
+import { ConfigService } from '../../services/configService';
 
 // Función para obtener Firestore de forma lazy
 const getFirestore = () => {
@@ -22,6 +23,22 @@ export const updateSubmissionStatus = async (req: Request, res: Response) => {
       });
     }
 
+    // Validar que el proyecto esté configurado
+    if (!ConfigService.isProductConfigured(projectId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid project configuration"
+      });
+    }
+
+    // Validar que las características necesarias estén habilitadas
+    if (!ConfigService.isFeatureEnabled(projectId, 'adminPanel')) {
+      return res.status(400).json({
+        success: false,
+        message: "Admin panel is not enabled for this project"
+      });
+    }
+
     // Validar que el nuevo estado sea válido según el flujo
     const validStatuses = ['pending', 'synced', 'in_progress', 'completed'];
     if (!validStatuses.includes(newStatus)) {
@@ -33,7 +50,8 @@ export const updateSubmissionStatus = async (req: Request, res: Response) => {
 
     // Obtener el documento actual para verificar el estado actual
     const db = getFirestore();
-    const docRef = db.collection('onboardingaudit_submissions').doc(submissionId);
+    const collectionName = ConfigService.getCollectionName(projectId, 'submissions');
+    const docRef = db.collection(collectionName).doc(submissionId);
     const doc = await docRef.get();
 
     if (!doc.exists) {

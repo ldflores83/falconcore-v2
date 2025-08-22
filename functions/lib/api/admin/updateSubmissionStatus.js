@@ -35,6 +35,7 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.updateSubmissionStatus = void 0;
 const admin = __importStar(require("firebase-admin"));
+const configService_1 = require("../../services/configService");
 // Función para obtener Firestore de forma lazy
 const getFirestore = () => {
     if (!admin.apps.length) {
@@ -53,6 +54,20 @@ const updateSubmissionStatus = async (req, res) => {
                 message: "Missing required parameters: projectId, submissionId, and newStatus"
             });
         }
+        // Validar que el proyecto esté configurado
+        if (!configService_1.ConfigService.isProductConfigured(projectId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid project configuration"
+            });
+        }
+        // Validar que las características necesarias estén habilitadas
+        if (!configService_1.ConfigService.isFeatureEnabled(projectId, 'adminPanel')) {
+            return res.status(400).json({
+                success: false,
+                message: "Admin panel is not enabled for this project"
+            });
+        }
         // Validar que el nuevo estado sea válido según el flujo
         const validStatuses = ['pending', 'synced', 'in_progress', 'completed'];
         if (!validStatuses.includes(newStatus)) {
@@ -63,7 +78,8 @@ const updateSubmissionStatus = async (req, res) => {
         }
         // Obtener el documento actual para verificar el estado actual
         const db = getFirestore();
-        const docRef = db.collection('onboardingaudit_submissions').doc(submissionId);
+        const collectionName = configService_1.ConfigService.getCollectionName(projectId, 'submissions');
+        const docRef = db.collection(collectionName).doc(submissionId);
         const doc = await docRef.get();
         if (!doc.exists) {
             return res.status(404).json({

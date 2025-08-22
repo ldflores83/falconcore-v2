@@ -4,6 +4,7 @@ import { Request, Response } from 'express';
 import { getOAuthCredentials } from '../../oauth/getOAuthCredentials';
 import { generateClientId } from '../../utils/hash';
 import * as admin from 'firebase-admin';
+import { ConfigService } from '../../services/configService';
 
 // Función para obtener Firestore de forma lazy
 const getFirestore = () => {
@@ -23,6 +24,22 @@ export const getPendingSubmissions = async (req: Request, res: Response) => {
       return res.status(400).json({
         success: false,
         message: "Missing required parameters: projectId and clientId"
+      });
+    }
+
+    // Validar que el proyecto esté configurado
+    if (!ConfigService.isProductConfigured(projectId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid project configuration"
+      });
+    }
+
+    // Validar que las características necesarias estén habilitadas
+    if (!ConfigService.isFeatureEnabled(projectId, 'adminPanel')) {
+      return res.status(400).json({
+        success: false,
+        message: "Admin panel is not enabled for this project"
       });
     }
 
@@ -50,7 +67,8 @@ export const getPendingSubmissions = async (req: Request, res: Response) => {
     
     console.log('📋 Loading pending submissions from Firestore...');
     
-    const snapshot = await db.collection('onboardingaudit_submissions')
+    const collectionName = ConfigService.getCollectionName(projectId, 'submissions');
+    const snapshot = await db.collection(collectionName)
       .where('status', '==', 'pending')
       .orderBy('createdAt', 'desc')
       .get();
@@ -60,28 +78,47 @@ export const getPendingSubmissions = async (req: Request, res: Response) => {
       submissionIds: snapshot.docs.map(doc => doc.id)
     });
     
-    const pendingSubmissions = snapshot.docs.map(doc => {
-      const data = doc.data();
-      console.log('📋 Processing pending submission:', {
-        id: doc.id,
-        email: data.email,
-        productName: data.productName,
-        status: data.status
-      });
-      
-      return {
-        id: doc.id,
-        email: data.email || 'Unknown',
-        productName: data.productName || 'Unknown',
-        productUrl: data.productUrl || '',
-        targetUser: data.targetUser || 'Unknown',
-        mainGoal: data.mainGoal || 'Unknown',
-        createdAt: data.createdAt?.toDate?.() || new Date(data.createdAt) || new Date(),
-        status: data.status || 'pending',
-        documentPath: data.documentPath || null,
-        documentUrl: data.documentUrl || null
-      };
-    });
+         const pendingSubmissions = snapshot.docs.map(doc => {
+       const data = doc.data();
+       
+       // Mapear campos del formulario de onboarding audit
+       const email = data.report_email || data.email || 'Unknown';
+       const productName = data.product_name || data.productName || 'Unknown';
+       const targetUser = data.target_user || data.targetUser || 'Unknown';
+       const mainGoal = data.main_goal || data.mainGoal || 'Unknown';
+       
+       // Manejar fechas correctamente
+       let createdAt;
+       if (data.createdAt?.toDate) {
+         createdAt = data.createdAt.toDate();
+       } else if (data.createdAt instanceof Date) {
+         createdAt = data.createdAt;
+       } else if (data.createdAt) {
+         createdAt = new Date(data.createdAt);
+       } else {
+         createdAt = new Date();
+       }
+       
+       console.log('📋 Processing pending submission:', {
+         id: doc.id,
+         email: email,
+         productName: productName,
+         status: data.status
+       });
+       
+       return {
+         id: doc.id,
+         email: email,
+         productName: productName,
+         productUrl: data.signup_link || data.productUrl || '',
+         targetUser: targetUser,
+         mainGoal: mainGoal,
+         createdAt: createdAt,
+         status: data.status || 'pending',
+         documentPath: data.documentPath || null,
+         documentUrl: data.documentUrl || null
+       };
+     });
 
     console.log('✅ Pending submissions loaded:', {
       projectId,

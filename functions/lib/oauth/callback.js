@@ -9,36 +9,74 @@ const saveOAuthData_1 = require("./saveOAuthData");
 const oauth_projects_2 = require("./oauth_projects");
 const check_1 = require("../api/auth/check");
 const hash_1 = require("../utils/hash");
-const secret_manager_1 = require("@google-cloud/secret-manager");
-const secretManagerClient = new secret_manager_1.SecretManagerServiceClient();
-// Helper function to validate ENCRYPTION_KEY
-async function validateEncryptionKey() {
-    try {
-        const projectId = 'falconcore-v2';
-        const secretName = `projects/${projectId}/secrets/ENCRYPTION_KEY/versions/latest`;
-        const [version] = await secretManagerClient.accessSecretVersion({ name: secretName });
-        const key = version.payload?.data?.toString().trim() || '';
-        if (!key || Buffer.from(key, 'hex').length !== 32) {
-            throw new Error("ENCRYPTION_KEY must be defined and 32 bytes long (hex string).");
+const crypto_1 = require("../utils/crypto");
+const configService_1 = require("../services/configService");
+const logger_1 = require("../utils/logger");
+const rateLimiter_1 = require("../utils/rateLimiter");
+// Cache para validar state parameters (prevenir replay attacks)
+const usedStates = new Map();
+const STATE_CACHE_TTL = 5 * 60 * 1000; // 5 minutos
+// Limpiar states expirados
+setInterval(() => {
+    const now = Date.now();
+    for (const [state, timestamp] of usedStates.entries()) {
+        if (now - timestamp > STATE_CACHE_TTL) {
+            usedStates.delete(state);
         }
     }
-    catch (error) {
-        throw new Error(`Missing or invalid ENCRYPTION_KEY, aborting OAuth flow: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-}
+}, 60000); // Limpiar cada minuto
 const callback = async (req, res) => {
     try {
-        console.log('🔄 OAuth Callback: Starting OAuth callback process...');
+        logger_1.logger.startOperation('oauth_callback', {
+            projectId: req.query.state,
+            ip: req.ip || req.connection.remoteAddress || 'unknown'
+        });
         const { code, state } = req.query;
         if (!code || !state) {
-            console.log('❌ OAuth Callback: Missing code or state parameters');
+            logger_1.logger.error('OAuth callback missing parameters', {
+                projectId: req.query.state
+            });
             return res.status(400).json({
                 success: false,
                 message: "Missing required parameters: code and state"
             });
         }
-        // El state es directamente el projectId según el flujo documentado
         const projectId = state;
+        // Validar rate limiting
+        const rateLimitKey = {
+            projectId,
+            ip: req.ip || req.connection.remoteAddress || 'unknown',
+            endpoint: '/oauth/callback'
+        };
+        if (!rateLimiter_1.rateLimiter.isAllowed(rateLimitKey)) {
+            logger_1.logger.security('Rate limit exceeded for OAuth callback', {
+                projectId,
+                ip: req.ip || req.connection.remoteAddress || 'unknown'
+            });
+            return res.status(429).json({
+                success: false,
+                message: "Too many OAuth callback attempts"
+            });
+        }
+        // Validar state parameter (prevenir replay attacks)
+        if (usedStates.has(projectId)) {
+            logger_1.logger.security('OAuth state parameter already used', {
+                projectId,
+                ip: req.ip || req.connection.remoteAddress || 'unknown'
+            });
+            return res.status(400).json({
+                success: false,
+                message: "Invalid or expired state parameter"
+            });
+        }
+        // Marcar state como usado
+        usedStates.set(projectId, Date.now());
+        // Validar que el proyecto está configurado
+        if (!configService_1.ConfigService.isProductConfigured(projectId)) {
+            logger_1.logger.error('OAuth callback for unconfigured project', { projectId });
+            const errorUrl = configService_1.ConfigService.getErrorUrl(projectId, 'project_not_configured');
+            return res.redirect(errorUrl);
+        }
         // Configurar OAuth2
         const oauthConfig = await (0, oauth_projects_1.getOAuthConfig)();
         const oauth2Client = new googleapis_1.google.auth.OAuth2(oauthConfig.clientId, oauthConfig.clientSecret, oauthConfig.redirectUri);
@@ -50,11 +88,11 @@ const callback = async (req, res) => {
         // 🔐 VALIDATE ENCRYPTION_KEY IMMEDIATELY AFTER RECEIVING TOKENS
         // This prevents any Drive operations if encryption is not properly configured
         try {
-            await validateEncryptionKey();
+            await (0, crypto_1.validateEncryptionKey)();
         }
         catch (error) {
-            console.error('❌ OAuth Callback: ENCRYPTION_KEY validation failed:', error);
-            const errorUrl = `https://uaylabs.web.app/${projectId}/login?error=encryption_failed`;
+            logger_1.logger.error('ENCRYPTION_KEY validation failed', { projectId }, error instanceof Error ? error : new Error(String(error)));
+            const errorUrl = configService_1.ConfigService.getErrorUrl(projectId, 'encryption_failed');
             return res.redirect(errorUrl);
         }
         // Obtener información real del usuario autenticado
@@ -82,26 +120,31 @@ const callback = async (req, res) => {
                 email: authenticatedEmail
             });
             // Crear sesión de administrador
-            console.log('🔄 OAuth Callback: Creating admin session for:', authenticatedEmail, projectId);
+            logger_1.logger.info('Creating admin session', { projectId });
             const sessionToken = await (0, check_1.createAdminSession)(authenticatedEmail, projectId);
-            console.log('✅ OAuth Callback: Admin session created with token:', sessionToken);
+            logger_1.logger.info('Admin session created', { projectId });
             // Redirigir directamente al admin panel
-            const adminUrl = `https://uaylabs.web.app/${projectId}/admin?token=${sessionToken}`;
-            console.log('🔄 OAuth Callback: Redirecting to admin panel:', adminUrl);
+            const adminUrl = configService_1.ConfigService.getAdminUrl(projectId, sessionToken);
+            logger_1.logger.info('Redirecting to admin panel', { projectId });
             return res.redirect(adminUrl);
         }
         catch (error) {
-            console.error('❌ OAuth Callback: Error in folder creation or data saving:', error);
+            logger_1.logger.error('Error in folder creation or data saving', { projectId }, error instanceof Error ? error : new Error(String(error)));
             // En caso de error, redirigir a una página de error
-            const errorUrl = `https://uaylabs.web.app/${projectId}/login?error=auth_failed`;
+            const errorUrl = configService_1.ConfigService.getErrorUrl(projectId, 'auth_failed');
             return res.redirect(errorUrl);
         }
     }
     catch (error) {
-        console.error('❌ OAuth Callback: General error:', error);
+        const projectId = req.query.state || 'unknown';
+        logger_1.logger.error('OAuth callback general error', { projectId }, error instanceof Error ? error : new Error(String(error)));
         // En caso de error general, redirigir a login
-        const errorUrl = `https://uaylabs.web.app/onboardingaudit/login?error=oauth_failed`;
+        const errorUrl = configService_1.ConfigService.getErrorUrl('onboardingaudit', 'oauth_failed');
         return res.redirect(errorUrl);
+    }
+    finally {
+        const projectId = req.query.state || 'unknown';
+        logger_1.logger.endOperation('oauth_callback', { projectId });
     }
 };
 exports.callback = callback;

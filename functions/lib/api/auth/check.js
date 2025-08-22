@@ -40,6 +40,7 @@ const admin = __importStar(require("firebase-admin"));
 const crypto = __importStar(require("crypto"));
 const hash_1 = require("../../utils/hash");
 const projectAdmins_1 = require("../../config/projectAdmins");
+const configService_1 = require("../../services/configService");
 const createAdminSession = async (email, projectId) => {
     const sessionToken = crypto.randomBytes(32).toString('hex');
     const clientId = (0, hash_1.generateClientId)(email, projectId);
@@ -54,7 +55,8 @@ const createAdminSession = async (email, projectId) => {
         ipAddress: 'admin-creation'
     };
     console.log('🔐 createAdminSession: Session data to save:', sessionData);
-    await admin.firestore().collection('admin_sessions').doc(sessionToken).set(sessionData);
+    const collectionName = configService_1.ConfigService.getCollectionName(projectId, 'admin_sessions');
+    await admin.firestore().collection(collectionName).doc(sessionToken).set(sessionData);
     console.log('✅ createAdminSession: Session saved to Firestore successfully');
     return sessionToken;
 };
@@ -75,10 +77,18 @@ const check = async (req, res) => {
                 message: "Missing required parameter: projectId"
             });
         }
+        // Validar que el proyecto esté configurado
+        if (!configService_1.ConfigService.isProductConfigured(projectId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid project configuration"
+            });
+        }
         // Si hay sessionToken, verificar la sesión de administrador
         if (sessionToken) {
             console.log('🔐 check: Checking session with token:', sessionToken);
-            const sessionDoc = await admin.firestore().collection('admin_sessions').doc(sessionToken).get();
+            const collectionName = configService_1.ConfigService.getCollectionName(projectId, 'admin_sessions');
+            const sessionDoc = await admin.firestore().collection(collectionName).doc(sessionToken).get();
             if (sessionDoc.exists) {
                 const sessionData = sessionDoc.data();
                 console.log('🔐 check: Session found:', sessionData);
@@ -110,7 +120,8 @@ const check = async (req, res) => {
                 else {
                     console.log('❌ check: Session expired, deleting');
                     // Sesión expirada, eliminarla
-                    await admin.firestore().collection('admin_sessions').doc(sessionToken).delete();
+                    const collectionName = configService_1.ConfigService.getCollectionName(projectId, 'admin_sessions');
+                    await admin.firestore().collection(collectionName).doc(sessionToken).delete();
                 }
             }
             else {

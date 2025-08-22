@@ -2,6 +2,7 @@
 
 import { Request, Response } from 'express';
 import * as admin from 'firebase-admin';
+import { ConfigService } from '../../services/configService';
 
 // Función para obtener Firestore de forma lazy
 const getFirestore = () => {
@@ -35,9 +36,29 @@ export const trackVisit = async (req: Request, res: Response) => {
       });
     }
 
+    // Validar que el proyecto esté configurado
+    if (!ConfigService.isProductConfigured(projectId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid project configuration"
+      });
+    }
+
+    // Validar que las características necesarias estén habilitadas
+    if (!ConfigService.isFeatureEnabled(projectId, 'analytics')) {
+      return res.status(400).json({
+        success: false,
+        message: "Analytics is not enabled for this project"
+      });
+    }
+
     const db = getFirestore();
     const timestamp = new Date();
     const dateKey = timestamp.toISOString().split('T')[0]; // YYYY-MM-DD
+
+    // Obtener nombres de colecciones específicos del proyecto
+    const analyticsVisitsCollection = ConfigService.getCollectionName(projectId, 'analytics_visits');
+    const analyticsStatsCollection = ConfigService.getCollectionName(projectId, 'analytics_stats');
 
     // Guardar visita individual
     const visitData = {
@@ -58,10 +79,10 @@ export const trackVisit = async (req: Request, res: Response) => {
       month: timestamp.getMonth() + 1
     };
 
-    await db.collection('analytics_visits').add(visitData);
+    await db.collection(analyticsVisitsCollection).add(visitData);
 
     // Actualizar estadísticas agregadas por día
-    const statsRef = db.collection('analytics_stats').doc(`${projectId}_${dateKey}`);
+    const statsRef = db.collection(analyticsStatsCollection).doc(`${projectId}_${dateKey}`);
     
     await db.runTransaction(async (transaction) => {
       const statsDoc = await transaction.get(statsRef);
@@ -132,7 +153,11 @@ export const trackVisit = async (req: Request, res: Response) => {
     console.log('✅ Visit tracked successfully:', {
       projectId,
       page,
-      timestamp: timestamp.toISOString()
+      timestamp: timestamp.toISOString(),
+      collections: {
+        visits: analyticsVisitsCollection,
+        stats: analyticsStatsCollection
+      }
     });
 
     return res.status(200).json({

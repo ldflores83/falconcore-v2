@@ -37,6 +37,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.receiveForm = void 0;
 const storage_1 = require("../../services/storage");
 const admin = __importStar(require("firebase-admin"));
+const configService_1 = require("../../services/configService");
 // Función para obtener Firestore de forma lazy
 const getFirestore = () => {
     if (!admin.apps.length) {
@@ -72,6 +73,20 @@ const receiveForm = async (req, res) => {
         const submissionId = `submission_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
         const projectIdFinal = projectId || 'onboardingaudit';
         const clientIdFinal = clientId || formData.report_email.split('@')[0];
+        // Validar que el proyecto esté configurado
+        if (!configService_1.ConfigService.isProductConfigured(projectIdFinal)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid project configuration"
+            });
+        }
+        // Validar que las características necesarias estén habilitadas
+        if (!configService_1.ConfigService.isFeatureEnabled(projectIdFinal, 'formSubmission')) {
+            return res.status(400).json({
+                success: false,
+                message: "Form submission is not enabled for this project"
+            });
+        }
         console.log('📝 Form submission received:', {
             submissionId,
             email: formData.report_email,
@@ -94,7 +109,8 @@ const receiveForm = async (req, res) => {
                 createdAt: new Date(),
                 updatedAt: new Date()
             };
-            const docRef = await db.collection('onboardingaudit_submissions').add(submissionData);
+            const collectionName = configService_1.ConfigService.getCollectionName(projectIdFinal, 'submissions');
+            const docRef = await db.collection(collectionName).add(submissionData);
             console.log('✅ Submission saved to Firestore:', docRef.id);
             // Generar documento del formulario
             console.log('📄 Generating form document...');
@@ -103,7 +119,8 @@ const receiveForm = async (req, res) => {
             const fileName = `Onboarding_Audit_${formData.product_name}_${new Date().toISOString().slice(0, 10)}.md`;
             const contentBuffer = Buffer.from(documentContent, 'utf-8');
             const storagePath = `submissions/${docRef.id}/${fileName}`;
-            const storageUrl = await (0, storage_1.uploadToStorage)('falconcore-onboardingaudit-uploads', storagePath, contentBuffer, 'text/markdown');
+            const storageBucket = configService_1.ConfigService.getStorageBucket(projectIdFinal);
+            const storageUrl = await (0, storage_1.uploadToStorage)(storageBucket, storagePath, contentBuffer, 'text/markdown');
             // Actualizar Firestore con la URL del documento y preparar para imágenes
             await docRef.update({
                 documentUrl: storageUrl,

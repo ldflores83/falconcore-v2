@@ -27,8 +27,7 @@ export default function WaitlistDashboard({ clientId }: WaitlistDashboardProps) 
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          projectId: 'onboardingaudit',
-          clientId: clientId
+          projectId: 'onboardingaudit'
         })
       });
 
@@ -49,14 +48,13 @@ export default function WaitlistDashboard({ clientId }: WaitlistDashboardProps) 
 
   const updateStatus = async (entryId: string, newStatus: 'waiting' | 'notified' | 'converted') => {
     try {
-      const response = await fetch('https://api-fu54nvsqfa-uc.a.run.app/api/admin/updateWaitlistStatus', {
+      const response = await fetch('https://api-fu54nvsqfa-uc.a.run.app/api/admin/waitlist', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           projectId: 'onboardingaudit',
-          clientId: clientId,
           entryId,
           newStatus
         })
@@ -76,7 +74,7 @@ export default function WaitlistDashboard({ clientId }: WaitlistDashboardProps) 
       }
     } catch (error) {
       console.error('Error updating status:', error);
-      alert('Network error. Please try again.');
+      setIsLoading(false);
     }
   };
 

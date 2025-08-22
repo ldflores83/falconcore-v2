@@ -36,207 +36,122 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getAnalytics = void 0;
 const admin = __importStar(require("firebase-admin"));
-// Función para obtener Firestore de forma lazy
-const getFirestore = () => {
-    if (!admin.apps.length) {
-        admin.initializeApp({
-            projectId: 'falconcore-v2'
-        });
-    }
-    return admin.firestore();
-};
+const configService_1 = require("../../services/configService");
+const getFirestore = () => admin.firestore();
 const getAnalytics = async (req, res) => {
     try {
-        const { projectId, period = '7d' } = req.body;
+        const { projectId } = req.body;
         if (!projectId) {
             return res.status(400).json({
                 success: false,
                 message: "Missing projectId parameter"
             });
         }
-        // Verificar que el userId corresponde al email autorizado
-        const { userId } = req.body;
-        if (!userId || !userId.includes('luisdaniel883@gmail.com')) {
-            return res.status(403).json({
+        // Validar que el producto esté configurado
+        if (!configService_1.ConfigService.isProductConfigured(projectId)) {
+            return res.status(400).json({
                 success: false,
-                message: "Access denied. Only authorized administrators can access analytics."
+                message: `Product ${projectId} is not configured`
+            });
+        }
+        // Validar que analytics esté habilitado
+        if (!configService_1.ConfigService.isFeatureEnabled(projectId, 'analytics')) {
+            return res.status(400).json({
+                success: false,
+                message: `Analytics feature is not enabled for ${projectId}`
             });
         }
         const db = getFirestore();
-        const now = new Date();
-        const endDate = now.toISOString().split('T')[0];
-        // Calcular fecha de inicio basada en el período
-        let startDate;
-        switch (period) {
-            case '1d':
-                startDate = endDate;
-                break;
-            case '7d':
-                const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-                startDate = sevenDaysAgo.toISOString().split('T')[0];
-                break;
-            case '30d':
-                const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-                startDate = thirtyDaysAgo.toISOString().split('T')[0];
-                break;
-            default:
-                const defaultSevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-                startDate = defaultSevenDaysAgo.toISOString().split('T')[0];
+        const submissionsCollection = configService_1.ConfigService.getCollectionName(projectId, 'submissions');
+        const waitlistCollection = configService_1.ConfigService.getCollectionName(projectId, 'waitlist');
+        const analyticsVisitsCollection = configService_1.ConfigService.getCollectionName(projectId, 'analytics_visits');
+        // Consultas secuenciales para evitar timeouts
+        let totalSubmissions = 0;
+        let totalWaitlist = 0;
+        let totalVisits = 0;
+        let lastActivity = new Date().toISOString();
+        try {
+            // Obtener submissions
+            const submissionsSnapshot = await db.collection(submissionsCollection).limit(1000).get();
+            totalSubmissions = submissionsSnapshot.size;
+            // Encontrar la submission más reciente
+            submissionsSnapshot.forEach(doc => {
+                const data = doc.data();
+                if (data.createdAt) {
+                    let timestamp;
+                    if (data.createdAt.toDate) {
+                        timestamp = data.createdAt.toDate();
+                    }
+                    else if (data.createdAt instanceof Date) {
+                        timestamp = data.createdAt;
+                    }
+                    else if (typeof data.createdAt === 'string') {
+                        timestamp = new Date(data.createdAt);
+                    }
+                    else {
+                        return;
+                    }
+                    if (timestamp > new Date(lastActivity)) {
+                        lastActivity = timestamp.toISOString();
+                    }
+                }
+            });
         }
-        // Obtener submissions de la colección que realmente existe
-        const submissionsQuery = db.collection('onboardingaudit_submissions')
-            .orderBy('createdAt', 'desc');
-        const submissionsSnapshot = await submissionsQuery.get();
-        const submissionsData = submissionsSnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-        }));
-        // Obtener estadísticas de visitas del período
-        const statsQuery = db.collection('analytics_stats')
-            .where('projectId', '==', projectId)
-            .where('dateKey', '>=', startDate)
-            .where('dateKey', '<=', endDate);
-        const statsSnapshot = await statsQuery.get();
-        const statsData = statsSnapshot.docs.map(doc => doc.data());
-        console.log('🔍 DEBUG: Stats data found:', {
-            statsCount: statsData.length,
-            statsData: statsData
-        });
-        // Calcular métricas básicas basadas en submissions
-        const totalSubmissions = submissionsData.length;
-        const pendingSubmissions = submissionsData.filter(sub => sub.status === 'pending').length;
-        const syncedSubmissions = submissionsData.filter(sub => sub.status === 'synced').length;
-        const completedSubmissions = submissionsData.filter(sub => sub.status === 'completed').length;
-        // Calcular métricas de visitas - si no hay stats, usar submissions como base
-        let totalVisits = statsData.reduce((sum, stat) => sum + (stat.totalVisits || 0), 0);
-        let totalUniqueVisitors = statsData.reduce((sum, stat) => sum + (stat.uniqueVisitors || 0), 0);
-        // Si no hay datos de visitas, usar submissions como proxy para visitas
-        if (totalVisits === 0 && totalSubmissions > 0) {
-            totalVisits = totalSubmissions * 3; // Estimación: 3 visitas por submission
-            totalUniqueVisitors = totalSubmissions * 2; // Estimación: 2 visitantes únicos por submission
-            console.log('📊 Using estimated visits based on submissions:', { totalVisits, totalUniqueVisitors });
+        catch (error) {
+            console.warn(`Error getting submissions for ${projectId}:`, error);
         }
-        const conversionRate = totalVisits > 0 ? (totalSubmissions / totalVisits * 100) : 0;
-        console.log('🔍 DEBUG: Calculated values:', {
-            totalVisits,
-            totalUniqueVisitors,
-            conversionRate,
-            statsDataLength: statsData.length
-        });
-        // Calcular métricas por día (combinando submissions y visitas)
-        const dailyStats = {};
-        // Agregar datos de submissions
-        submissionsData.forEach(submission => {
-            const date = submission.createdAt.toDate().toISOString().split('T')[0];
-            if (!dailyStats[date]) {
-                dailyStats[date] = {
-                    date,
-                    submissions: 0,
-                    pending: 0,
-                    synced: 0,
-                    completed: 0,
-                    visits: 0
-                };
-            }
-            dailyStats[date].submissions++;
-            if (submission.status === 'pending')
-                dailyStats[date].pending++;
-            if (submission.status === 'synced')
-                dailyStats[date].synced++;
-            if (submission.status === 'completed')
-                dailyStats[date].completed++;
-        });
-        // Agregar datos de visitas
-        statsData.forEach(stat => {
-            const date = stat.dateKey;
-            if (!dailyStats[date]) {
-                dailyStats[date] = {
-                    date,
-                    submissions: 0,
-                    pending: 0,
-                    synced: 0,
-                    completed: 0,
-                    visits: 0
-                };
-            }
-            dailyStats[date].visits = stat.totalVisits || 0;
-        });
-        const dailyStatsArray = Object.values(dailyStats).sort((a, b) => a.date.localeCompare(b.date));
-        // Calcular tendencias (comparar con período anterior)
-        const previousPeriodStart = new Date(new Date(startDate).getTime() - (new Date(endDate).getTime() - new Date(startDate).getTime()));
-        const previousStartDate = previousPeriodStart.toISOString().split('T')[0];
-        // Para el período anterior, simplemente tomamos la mitad de los submissions
-        const previousSubmissionsData = submissionsData.slice(Math.ceil(submissionsData.length / 2));
-        const previousTotalSubmissions = previousSubmissionsData.length;
-        const submissionsGrowth = previousTotalSubmissions > 0
-            ? ((totalSubmissions - previousTotalSubmissions) / previousTotalSubmissions * 100).toFixed(2)
-            : '0.00';
-        // Calcular top referrers
-        const referrers = statsData.reduce((acc, stat) => {
-            if (stat.referrers) {
-                Object.entries(stat.referrers).forEach(([referrer, count]) => {
-                    acc[referrer] = (acc[referrer] || 0) + count;
-                });
-            }
-            return acc;
-        }, {});
-        const topReferrers = Object.entries(referrers)
-            .sort(([, a], [, b]) => b - a)
-            .slice(0, 5)
-            .map(([referrer, count]) => ({ referrer, count }));
-        // Calcular dispositivos
-        const devices = statsData.reduce((acc, stat) => {
-            if (stat.devices) {
-                Object.entries(stat.devices).forEach(([device, count]) => {
-                    acc[device] = (acc[device] || 0) + count;
-                });
-            }
-            return acc;
-        }, {});
-        console.log('✅ Analytics retrieved successfully:', {
-            projectId,
-            period,
-            totalSubmissions,
-            pendingSubmissions,
-            syncedSubmissions,
-            completedSubmissions,
-            totalVisits,
-            totalUniqueVisitors,
-            conversionRate,
-            statsDataLength: statsData.length,
-            submissionsDataLength: submissionsData.length
-        });
-        console.log('🔍 DEBUG: About to return response with summary:', {
-            totalVisits: Number(totalVisits) || 0,
-            totalUniqueVisitors: Number(totalUniqueVisitors) || 0,
-            conversionRate: Number(conversionRate) || 0
-        });
+        try {
+            // Obtener waitlist
+            const waitlistSnapshot = await db.collection(waitlistCollection).limit(1000).get();
+            totalWaitlist = waitlistSnapshot.size;
+        }
+        catch (error) {
+            console.warn(`Error getting waitlist for ${projectId}:`, error);
+        }
+        try {
+            // Obtener analytics/visitas desde analytics_stats (estadísticas agregadas)
+            const analyticsStatsCollection = configService_1.ConfigService.getCollectionName(projectId, 'analytics_stats');
+            const analyticsStatsSnapshot = await db.collection(analyticsStatsCollection).limit(1000).get();
+            analyticsStatsSnapshot.forEach(doc => {
+                const data = doc.data();
+                // Sumar totalVisits de las estadísticas agregadas
+                if (data.totalVisits && typeof data.totalVisits === 'number') {
+                    totalVisits += data.totalVisits;
+                }
+                // Encontrar la actividad más reciente
+                if (data.lastUpdated) {
+                    let timestamp;
+                    if (data.lastUpdated.toDate) {
+                        timestamp = data.lastUpdated.toDate();
+                    }
+                    else if (data.lastUpdated instanceof Date) {
+                        timestamp = data.lastUpdated;
+                    }
+                    else if (typeof data.lastUpdated === 'string') {
+                        timestamp = new Date(data.lastUpdated);
+                    }
+                    else {
+                        return;
+                    }
+                    if (timestamp > new Date(lastActivity)) {
+                        lastActivity = timestamp.toISOString();
+                    }
+                }
+            });
+        }
+        catch (error) {
+            console.warn(`Error getting analytics stats for ${projectId}:`, error);
+        }
+        // Calcular tasa de conversión
+        const conversionRate = totalVisits > 0 ? ((totalSubmissions + totalWaitlist) / totalVisits) * 100 : 0;
         return res.status(200).json({
             success: true,
-            data: {
-                period,
-                summary: {
-                    totalVisits: Number(totalVisits) || 0,
-                    totalUniqueVisitors: Number(totalUniqueVisitors) || 0,
-                    totalSubmissions,
-                    pendingSubmissions,
-                    syncedSubmissions,
-                    completedSubmissions,
-                    submissionsGrowth: parseFloat(submissionsGrowth),
-                    avgProcessingTime: 0, // Placeholder
-                    conversionRate: Number(conversionRate) || 0
-                },
-                dailyStats: dailyStatsArray,
-                topReferrers,
-                devices,
-                submissions: submissionsData.map(sub => ({
-                    id: sub.id,
-                    email: sub.email,
-                    productName: sub.productName,
-                    createdAt: sub.createdAt,
-                    status: sub.status || 'pending'
-                }))
-            }
+            productId: projectId,
+            totalVisits,
+            totalSubmissions,
+            totalWaitlist,
+            conversionRate: Math.round(conversionRate * 100) / 100,
+            lastActivity
         });
     }
     catch (error) {

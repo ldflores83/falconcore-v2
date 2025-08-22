@@ -1,7 +1,22 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import Head from 'next/head';
+import { createAnalyticsTracker } from '../lib/analytics';
 
 export default function UayLabsLanding() {
+  // Initialize analytics tracker
+  useEffect(() => {
+    const tracker = createAnalyticsTracker('uaylabs');
+    tracker.trackPageVisit('uaylabs-landing');
+
+    // Track page exit
+    const handleBeforeUnload = () => {
+      tracker.trackPageExit();
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, []);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
       <Head>

@@ -1,7 +1,22 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import Head from 'next/head';
+import { createAnalyticsTracker } from '../lib/analytics';
 
 export default function PulzioHQ() {
+  // Initialize analytics tracker
+  useEffect(() => {
+    const tracker = createAnalyticsTracker('pulziohq');
+    tracker.trackPageVisit('pulziohq-landing');
+
+    // Track page exit
+    const handleBeforeUnload = () => {
+      tracker.trackPageExit();
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, []);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center">
       <Head>

@@ -3,6 +3,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.generateDocument = void 0;
 const providerFactory_1 = require("../../storage/utils/providerFactory");
+const configService_1 = require("../../services/configService");
 const generateDocument = async (req, res) => {
     try {
         const { templateId, filename, data, projectId } = req.body;
@@ -10,6 +11,20 @@ const generateDocument = async (req, res) => {
             return res.status(400).json({
                 success: false,
                 message: "Missing required parameters: filename, data, projectId"
+            });
+        }
+        // Validar que el proyecto esté configurado
+        if (!configService_1.ConfigService.isProductConfigured(projectId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid project configuration"
+            });
+        }
+        // Validar que las características necesarias estén habilitadas
+        if (!configService_1.ConfigService.isFeatureEnabled(projectId, 'documentGeneration')) {
+            return res.status(400).json({
+                success: false,
+                message: "Document generation is not enabled for this project"
             });
         }
         const provider = providerFactory_1.StorageProviderFactory.createProvider('google');

@@ -2,6 +2,7 @@
 
 import { Request, Response } from 'express';
 import { StorageProviderFactory } from '../../storage/utils/providerFactory';
+import { ConfigService } from '../../services/configService';
 
 export const generateDocument = async (req: Request, res: Response) => {
   try {
@@ -11,6 +12,22 @@ export const generateDocument = async (req: Request, res: Response) => {
       return res.status(400).json({
         success: false,
         message: "Missing required parameters: filename, data, projectId"
+      });
+    }
+
+    // Validar que el proyecto esté configurado
+    if (!ConfigService.isProductConfigured(projectId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid project configuration"
+      });
+    }
+
+    // Validar que las características necesarias estén habilitadas
+    if (!ConfigService.isFeatureEnabled(projectId, 'documentGeneration')) {
+      return res.status(400).json({
+        success: false,
+        message: "Document generation is not enabled for this project"
       });
     }
 

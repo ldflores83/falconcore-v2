@@ -3,6 +3,7 @@
 import { Request, Response } from 'express';
 import * as admin from 'firebase-admin';
 import { StorageProviderFactory } from '../../storage/utils/providerFactory';
+import { ConfigService } from '../../services/configService';
 
 export const updateStatus = async (req: Request, res: Response) => {
   try {
@@ -12,6 +13,22 @@ export const updateStatus = async (req: Request, res: Response) => {
       return res.status(400).json({
         success: false,
         message: "Missing required parameters: submissionId, newStatus, projectId"
+      });
+    }
+
+    // Validar que el proyecto esté configurado
+    if (!ConfigService.isProductConfigured(projectId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid project configuration"
+      });
+    }
+
+    // Validar que las características necesarias estén habilitadas
+    if (!ConfigService.isFeatureEnabled(projectId, 'adminPanel')) {
+      return res.status(400).json({
+        success: false,
+        message: "Admin panel is not enabled for this project"
       });
     }
 
@@ -25,7 +42,8 @@ export const updateStatus = async (req: Request, res: Response) => {
     }
 
     // Obtener la submission
-    const submissionRef = admin.firestore().collection('submissions').doc(submissionId);
+    const collectionName = ConfigService.getCollectionName(projectId, 'submissions');
+    const submissionRef = admin.firestore().collection(collectionName).doc(submissionId);
     const submissionDoc = await submissionRef.get();
 
     if (!submissionDoc.exists) {

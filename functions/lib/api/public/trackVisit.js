@@ -36,6 +36,7 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.trackVisit = void 0;
 const admin = __importStar(require("firebase-admin"));
+const configService_1 = require("../../services/configService");
 // Función para obtener Firestore de forma lazy
 const getFirestore = () => {
     if (!admin.apps.length) {
@@ -54,9 +55,26 @@ const trackVisit = async (req, res) => {
                 message: "Missing projectId parameter"
             });
         }
+        // Validar que el proyecto esté configurado
+        if (!configService_1.ConfigService.isProductConfigured(projectId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid project configuration"
+            });
+        }
+        // Validar que las características necesarias estén habilitadas
+        if (!configService_1.ConfigService.isFeatureEnabled(projectId, 'analytics')) {
+            return res.status(400).json({
+                success: false,
+                message: "Analytics is not enabled for this project"
+            });
+        }
         const db = getFirestore();
         const timestamp = new Date();
         const dateKey = timestamp.toISOString().split('T')[0]; // YYYY-MM-DD
+        // Obtener nombres de colecciones específicos del proyecto
+        const analyticsVisitsCollection = configService_1.ConfigService.getCollectionName(projectId, 'analytics_visits');
+        const analyticsStatsCollection = configService_1.ConfigService.getCollectionName(projectId, 'analytics_stats');
         // Guardar visita individual
         const visitData = {
             projectId,
@@ -75,9 +93,9 @@ const trackVisit = async (req, res) => {
             dayOfWeek: timestamp.getDay(),
             month: timestamp.getMonth() + 1
         };
-        await db.collection('analytics_visits').add(visitData);
+        await db.collection(analyticsVisitsCollection).add(visitData);
         // Actualizar estadísticas agregadas por día
-        const statsRef = db.collection('analytics_stats').doc(`${projectId}_${dateKey}`);
+        const statsRef = db.collection(analyticsStatsCollection).doc(`${projectId}_${dateKey}`);
         await db.runTransaction(async (transaction) => {
             const statsDoc = await transaction.get(statsRef);
             if (!statsDoc.exists) {
@@ -145,7 +163,11 @@ const trackVisit = async (req, res) => {
         console.log('✅ Visit tracked successfully:', {
             projectId,
             page,
-            timestamp: timestamp.toISOString()
+            timestamp: timestamp.toISOString(),
+            collections: {
+                visits: analyticsVisitsCollection,
+                stats: analyticsStatsCollection
+            }
         });
         return res.status(200).json({
             success: true,

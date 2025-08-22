@@ -36,6 +36,7 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.cleanupSessions = void 0;
 const admin = __importStar(require("firebase-admin"));
+const configService_1 = require("../../services/configService");
 // Función para obtener Firestore de forma lazy
 const getFirestore = () => {
     if (!admin.apps.length) {
@@ -54,6 +55,20 @@ const cleanupSessions = async (req, res) => {
                 message: "Missing required parameters: projectId and userId"
             });
         }
+        // Validar que el proyecto esté configurado
+        if (!configService_1.ConfigService.isProductConfigured(projectId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid project configuration"
+            });
+        }
+        // Validar que las características necesarias estén habilitadas
+        if (!configService_1.ConfigService.isFeatureEnabled(projectId, 'adminPanel')) {
+            return res.status(400).json({
+                success: false,
+                message: "Admin panel is not enabled for this project"
+            });
+        }
         // Verificar que el userId corresponde al email autorizado
         if (!userId.includes('luisdaniel883@gmail.com')) {
             return res.status(403).json({
@@ -65,7 +80,8 @@ const cleanupSessions = async (req, res) => {
         const now = Date.now();
         const maxAge = 24 * 60 * 60 * 1000; // 24 horas en milisegundos
         // Buscar sesiones expiradas
-        const sessionsRef = db.collection('admin_sessions');
+        const collectionName = configService_1.ConfigService.getCollectionName(projectId, 'admin_sessions');
+        const sessionsRef = db.collection(collectionName);
         const expiredSessions = await sessionsRef
             .where('expiresAt', '<', admin.firestore.Timestamp.fromMillis(now))
             .get();

@@ -1,6 +1,7 @@
 // /functions/src/api/public/getUsageStatus.ts
 
 import { Request, Response } from "express";
+import { ConfigService } from "../../services/configService";
 // import { GoogleDriveProvider } from "../../storage/providers/GoogleDriveProvider"; // Temporalmente comentado
 
 interface GetUsageStatusRequest {
@@ -20,6 +21,14 @@ export const getUsageStatus = async (req: Request, res: Response) => {
     const { projectId }: GetUsageStatusRequest = req.body;
 
     const projectIdFinal = projectId || 'onboardingaudit';
+
+    // Validar que el proyecto esté configurado
+    if (!ConfigService.isProductConfigured(projectIdFinal)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid project configuration"
+      });
+    }
 
     // TEMPORALMENTE: Retornar datos simulados hasta resolver Google Drive
     console.log('📊 Usage status requested (Google Drive temporalmente deshabilitado):', {

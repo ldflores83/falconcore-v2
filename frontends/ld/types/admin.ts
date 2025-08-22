@@ -1,11 +1,13 @@
 export interface Product {
   id: string;
   name: string;
-  slug: string;
   description: string;
-  status: 'active' | 'development' | 'paused';
-  createdAt: string;
-  updatedAt: string;
+  status: 'active' | 'development' | 'beta';
+  frontendUrl: string;
+  features: Record<string, boolean>;
+  collections: Record<string, string>;
+  storageBucket: string;
+  lastUpdated: string;
 }
 
 export interface ProductStats {

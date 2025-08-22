@@ -1,23 +1,14 @@
 // /functions/src/api/admin/waitlist.ts
 
 import { Request, Response } from "express";
-import { getOAuthCredentials } from "../../oauth/getOAuthCredentials";
-import { isProjectAdmin } from "../../config/projectAdmins";
 import * as admin from 'firebase-admin';
+import { ConfigService } from '../../services/configService';
 
-// Función para obtener Firestore de forma lazy
-const getFirestore = () => {
-  if (!admin.apps.length) {
-    admin.initializeApp({
-      projectId: 'falconcore-v2',
-    });
-  }
-  return admin.firestore();
-};
+const getFirestore = () => admin.firestore();
 
 interface GetWaitlistRequest {
   projectId: string;
-  clientId: string;
+  clientId?: string;
 }
 
 interface GetWaitlistResponse {
@@ -28,7 +19,7 @@ interface GetWaitlistResponse {
 
 interface UpdateWaitlistStatusRequest {
   projectId: string;
-  clientId: string;
+  clientId?: string;
   entryId: string;
   newStatus: 'waiting' | 'notified' | 'converted';
 }
@@ -40,130 +31,85 @@ interface UpdateWaitlistStatusResponse {
 
 // Obtener lista de waitlist
 export const getWaitlist = async (req: Request, res: Response) => {
-  console.log('📋 getWaitlist handler called with:', {
-    method: req.method,
-    path: req.path,
-    body: req.body,
-    headers: req.headers
-  });
-
   try {
-    const { projectId, clientId }: GetWaitlistRequest = req.body;
+    const { projectId }: GetWaitlistRequest = req.body;
 
-    console.log('🔍 getWaitlist: Received parameters:', { projectId, clientId });
-
-    if (!projectId || !clientId) {
-      console.log('❌ getWaitlist: Missing required parameters');
+    if (!projectId) {
       return res.status(400).json({
         success: false,
-        message: "Missing required parameters: projectId, clientId"
+        message: "Missing required parameter: projectId"
       });
     }
 
-    console.log('🔐 getWaitlist: Verifying OAuth credentials for clientId:', clientId);
-    
-    // Verificar credenciales OAuth
-    const credentials = await getOAuthCredentials(clientId);
-    
-    console.log('🔐 getWaitlist: OAuth credentials result:', {
-      hasCredentials: !!credentials,
-      email: credentials?.email,
-      projectId: credentials?.projectId
-    });
-    
-    if (!credentials) {
-      console.log('❌ getWaitlist: No OAuth credentials found');
-      return res.status(401).json({
+    // Validar que el producto esté configurado
+    if (!ConfigService.isProductConfigured(projectId)) {
+      return res.status(400).json({
         success: false,
-        message: "Not authenticated. Please login first."
+        message: `Product ${projectId} is not configured`
       });
     }
 
-    console.log('🔐 getWaitlist: Checking admin permissions for:', {
-      email: credentials.email,
-      projectId: credentials.projectId,
-      targetProjectId: projectId
-    });
-
-    // Verificar que el usuario es admin del proyecto
-    const isAdmin = isProjectAdmin(credentials.email, credentials.projectId);
-    console.log('🔐 getWaitlist: Admin check result:', { isAdmin });
-    
-    if (!isAdmin) {
-      console.log('❌ getWaitlist: User is not admin');
-      return res.status(403).json({
+    // Validar que waitlist esté habilitado
+    if (!ConfigService.isFeatureEnabled(projectId, 'waitlist')) {
+      return res.status(400).json({
         success: false,
-        message: "Access denied. You are not authorized as an administrator for this project."
+        message: `Waitlist feature is not enabled for ${projectId}`
       });
     }
 
-    console.log('🗄️ getWaitlist: Getting Firestore instance');
     const db = getFirestore();
+    const waitlistCollection = ConfigService.getCollectionName(projectId, 'waitlist');
 
-    console.log('🗄️ getWaitlist: Querying waitlist collection for projectId:', projectId);
-    
-    // Obtener waitlist del proyecto
-    console.log('🗄️ getWaitlist: Querying waitlist collection...');
-    
-    let waitlistSnapshot;
-    try {
-      // Intentar con orderBy primero
-      waitlistSnapshot = await db
-        .collection('waitlist_onboarding_audit')
-        .where('projectId', '==', projectId)
-        .orderBy('timestamp', 'desc')
-        .get();
+    // Obtener waitlist entries ordenados por fecha de creación
+    const waitlistSnapshot = await db.collection(waitlistCollection)
+      .orderBy('timestamp', 'desc')
+      .limit(100) // Limitar a 100 entradas para evitar timeouts
+      .get();
+
+    const waitlist: any[] = [];
+
+    waitlistSnapshot.forEach(doc => {
+      const data = doc.data();
       
-      console.log('🗄️ getWaitlist: Query with orderBy successful');
-    } catch (queryError) {
-      console.log('🗄️ getWaitlist: Query with orderBy failed, trying without orderBy...', queryError);
-      
-      // Si falla con orderBy, intentar sin ordenamiento
-      waitlistSnapshot = await db
-        .collection('waitlist_onboarding_audit')
-        .where('projectId', '==', projectId)
-        .get();
-        
-      console.log('🗄️ getWaitlist: Query without orderBy successful');
-    }
+      // Procesar timestamp
+      let timestamp: string;
+      if (data.timestamp) {
+        if (data.timestamp.toDate) {
+          timestamp = data.timestamp.toDate().toISOString();
+        } else if (data.timestamp instanceof Date) {
+          timestamp = data.timestamp.toISOString();
+        } else if (typeof data.timestamp === 'string') {
+          timestamp = data.timestamp;
+        } else {
+          timestamp = new Date().toISOString();
+        }
+      } else {
+        timestamp = new Date().toISOString();
+      }
 
-    console.log('🗄️ getWaitlist: Firestore query completed, docs count:', waitlistSnapshot.size);
-
-    const waitlist = waitlistSnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-      timestamp: doc.data().timestamp?.toDate?.() || doc.data().timestamp
-    }));
-
-    console.log('🗄️ getWaitlist: Processed waitlist data:', {
-      count: waitlist.length,
-      sampleEntry: waitlist.length > 0 ? waitlist[0] : null
-    });
-
-    console.log('✅ Waitlist retrieved:', {
-      projectId,
-      count: waitlist.length
+      waitlist.push({
+        id: doc.id,
+        email: data.email || data.userEmail || 'No email',
+        projectId: data.projectId || projectId,
+        status: data.status || 'waiting',
+        timestamp: timestamp,
+        name: data.name || data.userName || '',
+        phone: data.phone || data.userPhone || '',
+        source: data.source || 'unknown',
+        ...data
+      });
     });
 
     const response: GetWaitlistResponse = {
       success: true,
       waitlist,
-      message: `Retrieved ${waitlist.length} waitlist entries`
+      message: `Retrieved ${waitlist.length} waitlist entries for ${projectId}`
     };
 
     return res.status(200).json(response);
 
   } catch (error) {
     console.error("❌ Error in getWaitlist:", error);
-    
-    // Log más detalles del error
-    if (error instanceof Error) {
-      console.error("❌ getWaitlist error details:", {
-        message: error.message,
-        stack: error.stack,
-        name: error.name
-      });
-    }
     
     return res.status(500).json({
       success: false,
@@ -175,61 +121,65 @@ export const getWaitlist = async (req: Request, res: Response) => {
 
 // Actualizar estado de entrada en waitlist
 export const updateWaitlistStatus = async (req: Request, res: Response) => {
-  console.log('🔄 updateWaitlistStatus handler called with:', {
-    method: req.method,
-    path: req.path,
-    body: req.body,
-    headers: req.headers
-  });
-
   try {
-    const { projectId, clientId, entryId, newStatus }: UpdateWaitlistStatusRequest = req.body;
+    const { projectId, entryId, newStatus }: UpdateWaitlistStatusRequest = req.body;
 
-    if (!projectId || !clientId || !entryId || !newStatus) {
+    if (!projectId || !entryId || !newStatus) {
       return res.status(400).json({
         success: false,
-        message: "Missing required parameters: projectId, clientId, entryId, newStatus"
+        message: "Missing required parameters: projectId, entryId, newStatus"
       });
     }
 
-    // Verificar credenciales OAuth
-    const credentials = await getOAuthCredentials(clientId);
-    
-    if (!credentials) {
-      return res.status(401).json({
+    // Validar que el producto esté configurado
+    if (!ConfigService.isProductConfigured(projectId)) {
+      return res.status(400).json({
         success: false,
-        message: "Not authenticated. Please login first."
+        message: `Product ${projectId} is not configured`
       });
     }
 
-    // Verificar que el usuario es admin del proyecto
-    if (!isProjectAdmin(credentials.email, credentials.projectId)) {
-      return res.status(403).json({
+    // Validar que waitlist esté habilitado
+    if (!ConfigService.isFeatureEnabled(projectId, 'waitlist')) {
+      return res.status(400).json({
         success: false,
-        message: "Access denied. You are not authorized as an administrator for this project."
+        message: `Waitlist feature is not enabled for ${projectId}`
+      });
+    }
+
+    // Validar el status
+    const validStatuses = ['waiting', 'notified', 'converted'];
+    if (!validStatuses.includes(newStatus)) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid status. Must be one of: ${validStatuses.join(', ')}`
       });
     }
 
     const db = getFirestore();
+    const waitlistCollection = ConfigService.getCollectionName(projectId, 'waitlist');
 
-    // Actualizar estado en Firestore
-    await db
-      .collection('waitlist_onboarding_audit')
-      .doc(entryId)
-      .update({
-        status: newStatus,
-        updatedAt: new Date()
+    // Verificar que el documento existe
+    const docRef = db.collection(waitlistCollection).doc(entryId);
+    const doc = await docRef.get();
+
+    if (!doc.exists) {
+      return res.status(404).json({
+        success: false,
+        message: `Waitlist entry with ID ${entryId} not found`
       });
+    }
 
-    console.log('✅ Waitlist status updated:', {
-      entryId,
-      newStatus,
-      projectId
+    // Actualizar el estado en Firestore
+    await docRef.update({
+      status: newStatus,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedBy: 'admin' // TODO: Add actual user ID when auth is implemented
     });
 
     const response: UpdateWaitlistStatusResponse = {
       success: true,
-      message: `Waitlist entry status updated to ${newStatus}`
+      message: `Status updated to ${newStatus} for entry ${entryId}`
     };
 
     return res.status(200).json(response);
@@ -240,6 +190,7 @@ export const updateWaitlistStatus = async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: "Internal server error. Please try again later.",
+      error: error instanceof Error ? error.message : "Unknown error"
     });
   }
 };

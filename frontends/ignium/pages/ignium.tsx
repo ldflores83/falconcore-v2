@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import { useLanguage } from '../lib/useLanguage';
 import SuccessModal from '../components/SuccessModal';
+import { createAnalyticsTracker } from '../lib/analytics';
 
 export default function Ignium() {
   const { content, language, isLoading } = useLanguage();
@@ -11,6 +12,20 @@ export default function Ignium() {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
 
+  // Initialize analytics tracker
+  useEffect(() => {
+    const tracker = createAnalyticsTracker('ignium');
+    tracker.trackPageVisit('ignium-landing');
+
+    // Track page exit
+    const handleBeforeUnload = () => {
+      tracker.trackPageExit();
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, []);
+
   const handleWaitlistSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email) return;
@@ -18,7 +33,7 @@ export default function Ignium() {
     setIsSubmitting(true);
     try {
       // Call the Cloud Function instead of Next.js API
-      const response = await fetch('https://api-fu54nvsqfa-uc.a.run.app/waitlist', {
+      const response = await fetch('https://api-fu54nvsqfa-uc.a.run.app/api/public/addToWaitlist', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -26,13 +41,20 @@ export default function Ignium() {
         body: JSON.stringify({
           email,
           name,
-          language
+          language,
+          projectId: 'ignium',
+          productName: 'Ignium',
+          website: 'https://uaylabs.web.app/ignium'
         }),
       });
 
       const data = await response.json();
       
       if (data.success) {
+        // Track successful waitlist submission
+        const tracker = createAnalyticsTracker('ignium');
+        tracker.trackPageVisit('waitlist-success');
+        
         setSuccessMessage(data.message);
         setShowSuccessModal(true);
         setEmail('');

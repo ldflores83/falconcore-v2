@@ -38,6 +38,7 @@ const admin = __importStar(require("firebase-admin"));
 const getOAuthCredentials_1 = require("../../oauth/getOAuthCredentials");
 const providerFactory_1 = require("../../storage/utils/providerFactory");
 const hash_1 = require("../../utils/hash");
+const configService_1 = require("../../services/configService");
 const processSubmissions = async (req, res) => {
     try {
         const { projectId, clientId } = req.body;
@@ -45,6 +46,20 @@ const processSubmissions = async (req, res) => {
             return res.status(400).json({
                 success: false,
                 message: "Missing required parameters: projectId and clientId"
+            });
+        }
+        // Validar que el proyecto esté configurado
+        if (!configService_1.ConfigService.isProductConfigured(projectId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid project configuration"
+            });
+        }
+        // Validar que las características necesarias estén habilitadas
+        if (!configService_1.ConfigService.isFeatureEnabled(projectId, 'adminPanel')) {
+            return res.status(400).json({
+                success: false,
+                message: "Admin panel is not enabled for this project"
             });
         }
         // Verificar que el clientId corresponde al email autorizado
@@ -65,7 +80,8 @@ const processSubmissions = async (req, res) => {
             });
         }
         // Obtener SOLO submissions pendientes de sincronización
-        const submissionsRef = admin.firestore().collection('onboardingaudit_submissions');
+        const collectionName = configService_1.ConfigService.getCollectionName(projectId, 'submissions');
+        const submissionsRef = admin.firestore().collection(collectionName);
         const submissionsToProcess = await submissionsRef
             .where('status', '==', 'pending')
             .get();
@@ -101,7 +117,8 @@ const processSubmissions = async (req, res) => {
             // 2. Verificar y subir archivos adjuntos de esta submission desde Cloud Storage
             if (submission.attachments && submission.attachments.length > 0) {
                 console.log(`📁 Processing ${submission.attachments.length} attachments for ${submission.report_email}`);
-                const bucket = admin.storage().bucket('falconcore-onboardingaudit-uploads');
+                const storageBucket = configService_1.ConfigService.getStorageBucket(projectId);
+                const bucket = admin.storage().bucket(storageBucket);
                 let validAttachments = 0;
                 for (const attachment of submission.attachments) {
                     try {
@@ -162,7 +179,8 @@ const processSubmissions = async (req, res) => {
         // 5. Limpiar completamente el directorio submissions en Cloud Storage
         try {
             console.log(`🧹 Cleaning up Cloud Storage submissions directory...`);
-            const bucket = admin.storage().bucket('falconcore-onboardingaudit-uploads');
+            const storageBucket = configService_1.ConfigService.getStorageBucket(projectId);
+            const bucket = admin.storage().bucket(storageBucket);
             // Listar todos los archivos en el directorio submissions
             const [files] = await bucket.getFiles({ prefix: 'submissions/' });
             if (files.length > 0) {

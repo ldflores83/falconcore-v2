@@ -59,6 +59,28 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
+# Build ahau
+Write-Host "Construyendo ahau..." -ForegroundColor Yellow
+Set-Location "../ahau"
+npm run build
+
+# Verificar si el build fue exitoso
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Error en build de ahau" -ForegroundColor Red
+    exit 1
+}
+
+# Build ld
+Write-Host "Construyendo ld..." -ForegroundColor Yellow
+Set-Location "../ld"
+npm run build
+
+# Verificar si el build fue exitoso
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Error en build de ld" -ForegroundColor Red
+    exit 1
+}
+
 # Volver al directorio raíz
 Set-Location $PSScriptRoot/..
 
@@ -103,4 +125,6 @@ Write-Host "  - Ignium: https://uaylabs.web.app/ignium" -ForegroundColor White
 Write-Host "  - JobPulse: https://uaylabs.web.app/jobpulse" -ForegroundColor White
 Write-Host "  - PulzioHQ: https://uaylabs.web.app/pulziohq" -ForegroundColor White
 Write-Host "  - OnboardingAudit: https://uaylabs.web.app/onboardingaudit" -ForegroundColor White
+Write-Host "  - Ahau: https://uaylabs.web.app/ahau" -ForegroundColor White
+Write-Host "  - LD Admin: https://uaylabs.web.app/ld" -ForegroundColor White
 Write-Host "Backend API: https://api-fu54nvsqfa-uc.a.run.app" -ForegroundColor White 

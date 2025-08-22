@@ -24,8 +24,7 @@ export default function AnalyticsDashboard() {
       try {
         console.log('🚀 Fetching analytics from:', `${baseUrl}/admin/analytics`);
         console.log('📤 Request payload:', {
-          projectId: 'onboardingaudit',
-          userId: 'luisdaniel883@gmail.com_onboardingaudit'
+          projectId: 'onboardingaudit'
         });
         
         const response = await fetch(`${baseUrl}/admin/analytics`, {
@@ -34,8 +33,7 @@ export default function AnalyticsDashboard() {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            projectId: 'onboardingaudit',
-            userId: 'luisdaniel883@gmail.com_onboardingaudit'
+            projectId: 'onboardingaudit'
           })
         });
 
@@ -43,17 +41,17 @@ export default function AnalyticsDashboard() {
           const responseData = await response.json();
           console.log('📊 Analytics response received:', responseData);
           
-          if (responseData.success && responseData.data) {
-            // Transformar la respuesta del backend al formato que espera el frontend
+          if (responseData.success) {
+            // Usar el formato directo del nuevo endpoint
             const transformedData = {
-              totalVisits: responseData.data.summary?.totalVisits || 0,
-              totalSubmissions: responseData.data.summary?.totalSubmissions || 0,
-              conversionRate: responseData.data.summary?.conversionRate || 0,
-              recentActivity: responseData.data.submissions?.slice(0, 5).map((sub: any) => ({
-                timestamp: sub.createdAt?.toDate?.() || sub.createdAt || new Date(),
-                action: `Submission ${sub.status}`,
-                details: `${sub.email} - ${sub.productName || 'Product'}`
-              })) || []
+              totalVisits: responseData.totalVisits || 0,
+              totalSubmissions: responseData.totalSubmissions || 0,
+              conversionRate: responseData.conversionRate || 0,
+              recentActivity: [{
+                timestamp: responseData.lastActivity || new Date(),
+                action: 'Last Activity',
+                details: `Last activity: ${responseData.lastActivity || 'No recent activity'}`
+              }]
             };
             
             console.log('🔄 Transformed analytics data:', transformedData);
