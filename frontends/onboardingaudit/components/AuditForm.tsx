@@ -2,6 +2,7 @@ import React, { useState, useCallback, useMemo } from 'react';
 import { OnboardingAuditForm } from '../types/form';
 import { OnboardingAuditClient } from '../lib/api';
 import { createAnalyticsTracker } from '../lib/analytics';
+import Tooltip from './Tooltip';
 
 interface AuditFormProps {
   onSubmit: (success: boolean, message: string) => void;
@@ -503,7 +504,9 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
           <div className="space-y-4">
             <div>
               <label className="block text-white text-sm font-medium mb-2">
-                Product name *
+                <Tooltip content="Name of the product being audited.">
+                  Product name *
+                </Tooltip>
               </label>
               <input
                 type="text"
@@ -517,7 +520,9 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
             
             <div>
               <label className="block text-white text-sm font-medium mb-2">
-                Link to signup or homepage *
+                <Tooltip content="Public link where a new user can start.">
+                  Link to signup or homepage *
+                </Tooltip>
               </label>
               <input
                 type="url"
@@ -531,7 +536,9 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
             
                          <div>
                <label className="block text-white text-sm font-medium mb-2">
-                 Who is your target user? *
+                 <Tooltip content="Main audience for your product.">
+                   Who is your target user? *
+                 </Tooltip>
                </label>
                <select
                  required
@@ -553,7 +560,9 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
 
             <div>
               <label className="block text-white text-sm font-medium mb-2">
-                Value proposition (1 line) *
+                <Tooltip content="Short sentence describing the unique value your product provides.">
+                  Value proposition (1 line) *
+                </Tooltip>
               </label>
               <input
                 type="text"
@@ -567,7 +576,9 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
 
                          <div>
                <label className="block text-white text-sm font-medium mb-2">
-                 ICP — Company size *
+                 <Tooltip content="Company size your product serves best.">
+                   ICP — Company size *
+                 </Tooltip>
                </label>
                <select
                  required
@@ -585,7 +596,9 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
 
                          <div>
                <label className="block text-white text-sm font-medium mb-2">
-                 ICP — Industry *
+                 <Tooltip content="Industry your product serves best.">
+                   ICP — Industry *
+                 </Tooltip>
                </label>
                <select
                  required
@@ -609,7 +622,9 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
 
                          <div>
                <label className="block text-white text-sm font-medium mb-2">
-                 ICP — Primary role *
+                 <Tooltip content="Primary role of the user who will use your product.">
+                   ICP — Primary role *
+                 </Tooltip>
                </label>
                <select
                  required
@@ -629,7 +644,9 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
 
             <div>
               <label className="block text-white text-sm font-medium mb-2">
-                Primary JTBD (Job To Be Done) for Day-1 *
+                <Tooltip content="Main task or problem the user wants to solve on their first day.">
+                  Primary JTBD (Job To Be Done) for Day-1 *
+                </Tooltip>
               </label>
               <textarea
                 required
@@ -643,7 +660,9 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
 
                          <div>
                <label className="block text-white text-sm font-medium mb-2">
-                 Pricing tier analyzed *
+                 <Tooltip content="Which pricing tier you want us to analyze for the audit.">
+                   Pricing tier analyzed *
+                 </Tooltip>
                </label>
                <select
                  required
@@ -663,7 +682,9 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
 
             <div>
               <label className="block text-white text-sm font-medium mb-2">
-                Main competitor
+                <Tooltip content="Primary competitor for comparison.">
+                  Main competitor
+                </Tooltip>
               </label>
               <input
                 type="text"
@@ -684,7 +705,9 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
           <div className="space-y-4">
             <div>
               <label className="block text-white text-sm font-medium mb-2">
-                How do new users sign up today? *
+                <Tooltip content="Available sign-up methods for new users.">
+                  How do new users sign up today? *
+                </Tooltip>
               </label>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 {[
@@ -716,7 +739,9 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
             
                          <div>
                <label className="block text-white text-sm font-medium mb-2">
-                 After signup, what do users see first? *
+                 <Tooltip content="What users encounter immediately after completing signup.">
+                   After signup, what do users see first? *
+                 </Tooltip>
                </label>
                <select
                  required
@@ -736,7 +761,9 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
             
                          <div>
                <label className="block text-white text-sm font-medium mb-2">
-                 Do you track drop-off points during onboarding? *
+                 <Tooltip content="Whether you monitor where users abandon the onboarding process.">
+                   Do you track drop-off points during onboarding? *
+                 </Tooltip>
                </label>
                <select
                  required
@@ -754,7 +781,9 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
 
             <div>
               <label className="block text-white text-sm font-medium mb-2">
-                Activation definition (event/condition) *
+                <Tooltip content="Exact action(s) that define an activated user.">
+                  Activation definition (event/condition) *
+                </Tooltip>
               </label>
               <input
                 type="text"
@@ -768,7 +797,9 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
 
             <div>
               <label className="block text-white text-sm font-medium mb-2">
-                Aha moment (short)
+                <Tooltip content="The moment when users realize the value of your product.">
+                  Aha moment (short)
+                </Tooltip>
               </label>
               <input
                 type="text"
@@ -779,23 +810,26 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
               />
             </div>
 
-            <div>
-              <label className="block text-white text-sm font-medium mb-2">
-                Time-to-Aha (minutes)
-              </label>
-              <input
-                type="number"
-                min={0}
-                className="form-input"
-                value={formData.time_to_aha_minutes || ''}
-                onChange={(e) => handleInputChange('time_to_aha_minutes', e.target.value ? parseInt(e.target.value) : undefined)}
-                placeholder="e.g., 12"
-              />
-            </div>
+                         <div>
+               <label className="block text-white text-sm font-medium mb-2">
+                 <Tooltip content="How long it takes users to reach their aha moment. Specify the time and unit (e.g., 12 minutes, 2 hours, 3 days).">
+                   Time-to-Aha
+                 </Tooltip>
+               </label>
+               <input
+                 type="text"
+                 className="form-input"
+                 value={formData.time_to_aha_minutes || ''}
+                 onChange={(e) => handleInputChange('time_to_aha_minutes', e.target.value)}
+                 placeholder="e.g., 12 minutes, 2 hours, 3 days"
+               />
+             </div>
 
             <div>
               <label className="block text-white text-sm font-medium mb-2">
-                Blocking steps
+                <Tooltip content="Steps that might prevent users from completing onboarding.">
+                  Blocking steps
+                </Tooltip>
               </label>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 {[
@@ -825,7 +859,9 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
 
             <div>
               <label className="block text-white text-sm font-medium mb-2">
-                Platforms
+                <Tooltip content="Platforms where your onboarding flow is available.">
+                  Platforms
+                </Tooltip>
               </label>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 {[
@@ -854,7 +890,9 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
 
             <div>
               <label className="block text-white text-sm font-medium mb-2">
-                SSO / compliance constraints
+                <Tooltip content="Compliance requirements or SSO constraints that affect your onboarding.">
+                  SSO / compliance constraints
+                </Tooltip>
               </label>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 {[
@@ -892,7 +930,9 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
           <div className="space-y-4">
                          <div>
                <label className="block text-white text-sm font-medium mb-2">
-                 Analytics tool *
+                 <Tooltip content="Which analytics platform you use to track user behavior.">
+                   Analytics tool *
+                 </Tooltip>
                </label>
                <select
                  required
@@ -912,7 +952,9 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
 
             <div>
               <label className="block text-white text-sm font-medium mb-2">
-                Key events available
+                <Tooltip content="Important user actions you currently track in your analytics.">
+                  Key events available
+                </Tooltip>
               </label>
               <input
                 type="text"
@@ -925,7 +967,9 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
 
             <div>
               <label className="block text-white text-sm font-medium mb-2">
-                Signups/week
+                <Tooltip content="Average number of new user signups per week.">
+                  Signups/week
+                </Tooltip>
               </label>
               <input
                 type="number"
@@ -938,7 +982,9 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
 
             <div>
               <label className="block text-white text-sm font-medium mb-2">
-                MAU
+                <Tooltip content="Monthly Active Users - users who engage with your product monthly.">
+                  MAU
+                </Tooltip>
               </label>
               <input
                 type="number"
@@ -951,7 +997,9 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
 
             <div>
               <label className="block text-white text-sm font-medium mb-2">
-                % mobile
+                <Tooltip content="Percentage of users who access your product via mobile devices.">
+                  % mobile
+                </Tooltip>
               </label>
               <input
                 type="number"
@@ -965,7 +1013,9 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
 
             <div>
               <label className="block text-white text-sm font-medium mb-2">
-                Read-only access / demo
+                <Tooltip content="Whether you can provide read-only access or demo environment for the audit.">
+                  Read-only access / demo
+                </Tooltip>
               </label>
               <div className="space-y-2">
                 <label className="flex items-center">
@@ -995,7 +1045,9 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
 
             <div>
               <label className="block text-white text-sm font-medium mb-2">
-                Access instructions
+                <Tooltip content="Instructions for accessing your demo or read-only environment.">
+                  Access instructions
+                </Tooltip>
               </label>
               <textarea
                 className="form-input"
@@ -1016,7 +1068,9 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
           <div className="space-y-4">
                          <div>
                <label className="block text-white text-sm font-medium mb-2">
-                 Main goal for this audit *
+                 <Tooltip content="Primary metric you want to improve through this audit.">
+                   Main goal for this audit *
+                 </Tooltip>
                </label>
                <select
                  required
@@ -1036,7 +1090,9 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
             
             <div>
               <label className="block text-white text-sm font-medium mb-2">
-                Do you know your churn rate?
+                <Tooltip content="Whether you currently track user churn rates.">
+                  Do you know your churn rate?
+                </Tooltip>
               </label>
               <select
                 className="form-select"
@@ -1052,7 +1108,9 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
             
             <div>
               <label className="block text-white text-sm font-medium mb-2">
-                When does churn usually happen?
+                <Tooltip content="At what point in the user journey do users typically leave.">
+                  When does churn usually happen?
+                </Tooltip>
               </label>
               <select
                 className="form-select"
@@ -1071,7 +1129,9 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
 
             <div>
               <label className="block text-white text-sm font-medium mb-2">
-                Target improvement (%)
+                <Tooltip content="Percentage improvement you're aiming for in your main goal metric.">
+                  Target improvement (%)
+                </Tooltip>
               </label>
               <input
                 type="number"
@@ -1086,7 +1146,9 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
 
             <div>
               <label className="block text-white text-sm font-medium mb-2">
-                Time horizon
+                <Tooltip content="Timeframe for implementing the improvements from the audit.">
+                  Time horizon
+                </Tooltip>
               </label>
               <select
                 className="form-select"
@@ -1102,7 +1164,9 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
 
             <div>
               <label className="block text-white text-sm font-medium mb-2">
-                Main segments
+                <Tooltip content="Primary user segments you want to focus on for this audit.">
+                  Main segments
+                </Tooltip>
               </label>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 {[
@@ -1133,7 +1197,9 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
             
             <div>
               <label className="block text-white text-sm font-medium mb-2">
-                Specific constraints/risks
+                <Tooltip content="Limitations or risks to consider when implementing improvements.">
+                  Specific constraints/risks
+                </Tooltip>
               </label>
               <textarea
                 className="form-input"
@@ -1154,7 +1220,9 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
           <div className="space-y-4">
             <div>
               <label className="block text-white text-sm font-medium mb-2">
-                Feature flags / A/B infrastructure available
+                <Tooltip content="Whether you have the infrastructure to run A/B tests or feature flags.">
+                  Feature flags / A/B infrastructure available
+                </Tooltip>
               </label>
               <select
                 className="form-select"
@@ -1169,7 +1237,9 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
 
             <div>
               <label className="block text-white text-sm font-medium mb-2">
-                A/B or feature flag tool (if any)
+                <Tooltip content="Specific tool you use for A/B testing or feature flags.">
+                  A/B or feature flag tool (if any)
+                </Tooltip>
               </label>
               <input
                 type="text"
@@ -1182,7 +1252,9 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
 
             <div>
               <label className="block text-white text-sm font-medium mb-2">
-                Languages / regions
+                <Tooltip content="Languages and regions your product supports.">
+                  Languages / regions
+                </Tooltip>
               </label>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 {[
@@ -1212,7 +1284,9 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
 
             <div>
               <label className="block text-white text-sm font-medium mb-2">
-                Current empty states (screenshots or URLs)
+                <Tooltip content="Links to screenshots or descriptions of your current empty states.">
+                  Current empty states (screenshots or URLs)
+                </Tooltip>
               </label>
               <textarea
                 className="form-input"
@@ -1225,7 +1299,9 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
 
             <div>
               <label className="block text-white text-sm font-medium mb-2">
-                Push/in-app notifications (provider)
+                <Tooltip content="Tool you use for push notifications and in-app messaging.">
+                  Push/in-app notifications (provider)
+                </Tooltip>
               </label>
               <input
                 type="text"
@@ -1246,7 +1322,9 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
           <div className="space-y-4">
             <div>
               <label className="block text-white text-sm font-medium mb-2">
-                Your email to send the report *
+                <Tooltip content="Email address where you want to receive your audit report.">
+                  Your email to send the report *
+                </Tooltip>
               </label>
               <input
                 type="email"
@@ -1260,7 +1338,9 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
             
             <div>
               <label className="block text-white text-sm font-medium mb-2">
-                Include benchmarks
+                <Tooltip content="Whether to include industry benchmarks in your audit report.">
+                  Include benchmarks
+                </Tooltip>
               </label>
               <label className="flex items-center">
                 <input
@@ -1275,7 +1355,9 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
 
             <div>
               <label className="block text-white text-sm font-medium mb-2">
-                Do you want an A/B experiment plan?
+                <Tooltip content="Whether to include A/B testing recommendations in your audit report.">
+                  Do you want an A/B experiment plan?
+                </Tooltip>
               </label>
               <label className="flex items-center">
                 <input
@@ -1290,7 +1372,9 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
             
             <div>
               <label className="block text-white text-sm font-medium mb-2">
-                Upload screenshots (optional)
+                <Tooltip content="Upload screenshots of your onboarding flow to help us provide more specific recommendations.">
+                  Upload screenshots (optional)
+                </Tooltip>
               </label>
               <input
                 type="file"
@@ -1333,7 +1417,9 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
 
             <div>
               <label className="block text-white text-sm font-medium mb-2">
-                Walkthrough video (Loom)
+                <Tooltip content="Link to a video walkthrough of your onboarding flow (Loom, etc.).">
+                  Walkthrough video (Loom)
+                </Tooltip>
               </label>
               <input
                 type="url"
@@ -1346,7 +1432,9 @@ export default function AuditForm({ onSubmit }: AuditFormProps) {
 
             <div>
               <label className="block text-white text-sm font-medium mb-2">
-                Demo account / sandbox
+                <Tooltip content="Demo account credentials or sandbox access for testing your onboarding flow.">
+                  Demo account / sandbox
+                </Tooltip>
               </label>
               <input
                 type="text"
