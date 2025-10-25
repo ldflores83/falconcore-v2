@@ -1,22 +1,28 @@
 import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
-import { useLanguage } from '../lib/useLanguage';
+import { useAuthCtx } from '../context/AuthContext';
+import { useRouter } from 'next/router';
 import HeroSection from '../components/HeroSection';
 import WaitlistForm from '../components/WaitlistForm';
 import { createAnalyticsTracker } from '../lib/analytics';
 
 export default function Ahau() {
-  const { content, language, isLoading } = useLanguage();
+  const { user, session } = useAuthCtx();
+  const router = useRouter();
   const [showWaitlist, setShowWaitlist] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
 
-  // Initialize analytics tracker
+  useEffect(() => {
+    if (user && session?.tenantId) {
+      router.push('/dashboard');
+    }
+  }, [user, session, router]);
+
   useEffect(() => {
     const tracker = createAnalyticsTracker('ahau');
     tracker.trackPageVisit('ahau-landing');
 
-    // Track page exit
     const handleBeforeUnload = () => {
       tracker.trackPageExit();
     };
@@ -26,34 +32,24 @@ export default function Ahau() {
   }, []);
 
   const handleCTAClick = () => {
-    // Track CTA click
     const tracker = createAnalyticsTracker('ahau');
     tracker.trackPageVisit('cta-click');
-    
+
     setShowWaitlist(true);
     document.getElementById('waitlist-section')?.scrollIntoView({ behavior: 'smooth' });
   };
 
   const handleWaitlistSubmit = (success: boolean, message: string) => {
     if (success) {
-      // Track successful waitlist submission
       const tracker = createAnalyticsTracker('ahau');
       tracker.trackPageVisit('waitlist-success');
-      
+
       setSuccessMessage(message);
       setShowSuccessModal(true);
     } else {
       alert(message);
     }
   };
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-hero-gradient flex items-center justify-center">
-        <div className="text-white text-xl">Loading...</div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-hero-gradient">
@@ -68,33 +64,45 @@ export default function Ahau() {
       </Head>
 
       {/* Hero Section */}
-      <HeroSection content={content.hero} onCTAClick={handleCTAClick} />
+      <HeroSection onCTAClick={handleCTAClick} content={{
+        badge: 'Acceso temprano disponible',
+        title: 'El liderazgo, sincronizado para amplificar tu marca',
+        subtitle: 'Activa y coordina las voces de tus líderes en LinkedIn con IA',
+        description: 'Ahau ayuda a tu equipo ejecutivo a publicar contenido consistente y de alto impacto, alineado con tu estrategia de marca.',
+        ctaPrimary: 'Únete a la lista de espera',
+        socialProof: [
+          'Confianza de equipos en LATAM',
+          'Contenido 3x más consistente',
+          'Alineación de marca basada en IA'
+        ]
+      }} />
 
       {/* Problem Section */}
       <section className="py-20 px-4">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-6">
-              {content.problem.title}
-            </h2>
+            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-6">El problema que resolvemos</h2>
             <p className="text-lg md:text-xl text-gray-300 max-w-3xl mx-auto">
-              {content.problem.subtitle}
+              Falta de alineación, tiempo e ideas frena la participación en LinkedIn. Las marcas pierden alcance orgánico porque cada líder publica de forma aislada y sin consistencia.
             </p>
           </div>
-          
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {content.problem.painPoints.map((point, index) => (
-              <div key={index} className="card">
-                <div className="flex items-start space-x-4">
-                  <div className="flex-shrink-0 w-8 h-8 bg-ahau-coral rounded-full flex items-center justify-center mt-1">
-                    <span className="text-white font-bold text-sm">{index + 1}</span>
-                  </div>
-                  <p className="text-gray-300 leading-relaxed">
-                    {point}
-                  </p>
-                </div>
-              </div>
-            ))}
+            <div className="card">
+              <h3 className="text-white font-semibold mb-2">Desalineación de voces</h3>
+              <p className="text-gray-300">Los mensajes no están coordinados; se diluye el posicionamiento.</p>
+            </div>
+            <div className="card">
+              <h3 className="text-white font-semibold mb-2">Falta de tiempo</h3>
+              <p className="text-gray-300">Líderes con agenda llena no logran publicar con frecuencia.</p>
+            </div>
+            <div className="card">
+              <h3 className="text-white font-semibold mb-2">Baja participación</h3>
+              <p className="text-gray-300">Sin incentivos ni métricas compartidas, la constancia cae.</p>
+            </div>
+            <div className="card">
+              <h3 className="text-white font-semibold mb-2">ROI poco visible</h3>
+              <p className="text-gray-300">Sin seguimiento, es difícil demostrar impacto en marca y ventas.</p>
+            </div>
           </div>
         </div>
       </section>
@@ -103,27 +111,28 @@ export default function Ahau() {
       <section className="py-20 bg-gradient-to-r from-ahau-blue/10 to-ahau-dark/10 px-4">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-6">
-              {content.solution.title}
-            </h2>
+            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-6">Cómo Ahau lo resuelve</h2>
             <p className="text-lg md:text-xl text-gray-300 max-w-3xl mx-auto">
-              {content.solution.subtitle}
+              De la estrategia a la publicación, sin fricción. Coordina y amplifica la voz de líderes con IA.
             </p>
           </div>
-          
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {content.solution.features.map((feature, index) => (
-              <div key={index} className="card">
-                <div className="flex items-start space-x-4">
-                  <div className="flex-shrink-0 w-8 h-8 bg-ahau-gold rounded-full flex items-center justify-center mt-1">
-                    <span className="text-ahau-dark font-bold text-sm">{index + 1}</span>
-                  </div>
-                  <p className="text-gray-300 leading-relaxed">
-                    {feature}
-                  </p>
-                </div>
-              </div>
-            ))}
+            <div className="card">
+              <h3 className="text-white font-semibold mb-2">Personalización por tono</h3>
+              <p className="text-gray-300">Analizamos publicaciones pasadas para adaptar estilo y voz de cada líder.</p>
+            </div>
+            <div className="card">
+              <h3 className="text-white font-semibold mb-2">Gamificación y métricas</h3>
+              <p className="text-gray-300">Rankings y KPIs visibles para incentivar la participación.</p>
+            </div>
+            <div className="card">
+              <h3 className="text-white font-semibold mb-2">Velocidad de entrega</h3>
+              <p className="text-gray-300">Contenido listo en minutos, no días.</p>
+            </div>
+            <div className="card">
+              <h3 className="text-white font-semibold mb-2">Escalable</h3>
+              <p className="text-gray-300">Pensado para publicar automáticamente vía API en fases posteriores.</p>
+            </div>
           </div>
         </div>
       </section>
@@ -132,52 +141,32 @@ export default function Ahau() {
       <section className="py-20 px-4">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-6">
-              {content.benefits.title}
-            </h2>
+            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-6">Beneficios</h2>
           </div>
-          
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {content.benefits.items.map((item, index) => (
-              <div key={index} className="card">
-                <div className="text-center">
-                  <div className="w-16 h-16 bg-gradient-to-r from-ahau-gold to-ahau-coral rounded-full flex items-center justify-center mx-auto mb-4">
-                    {index === 0 && (
-                      <svg className="w-8 h-8 text-ahau-dark" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                      </svg>
-                    )}
-                    {index === 1 && (
-                      <svg className="w-8 h-8 text-ahau-dark" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                      </svg>
-                    )}
-                    {index === 2 && (
-                      <svg className="w-8 h-8 text-ahau-dark" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                    )}
-                    {index === 3 && (
-                      <svg className="w-8 h-8 text-ahau-dark" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                      </svg>
-                    )}
-                  </div>
-                  <h3 className="text-xl font-semibold text-white mb-3">{item.title}</h3>
-                  <p className="text-gray-300">
-                    {item.description}
-                  </p>
-                </div>
-              </div>
-            ))}
+            <div className="card text-center">
+              <h3 className="text-xl font-semibold text-white mb-3">Más visibilidad de marca</h3>
+              <p className="text-gray-300">Amplifica el alcance orgánico coordinando las voces clave.</p>
+            </div>
+            <div className="card text-center">
+              <h3 className="text-xl font-semibold text-white mb-3">Alineación interna</h3>
+              <p className="text-gray-300">Todos comunican un mismo mensaje estratégico con su propia voz.</p>
+            </div>
+            <div className="card text-center">
+              <h3 className="text-xl font-semibold text-white mb-3">Ahorro de tiempo</h3>
+              <p className="text-gray-300">Menos fricción para pasar de la idea a la publicación.</p>
+            </div>
+            <div className="card text-center">
+              <h3 className="text-xl font-semibold text-white mb-3">ROI medible</h3>
+              <p className="text-gray-300">Métricas claras para demostrar impacto.</p>
+            </div>
           </div>
         </div>
       </section>
 
       {/* Waitlist Section */}
       <div id="waitlist-section">
-        <WaitlistForm content={content.waitlist} onSubmit={handleWaitlistSubmit} />
+        <WaitlistForm onSubmit={handleWaitlistSubmit} />
       </div>
 
       {/* Footer */}
@@ -217,25 +206,6 @@ export default function Ahau() {
               <p className="text-gray-600 mb-6">
                 {successMessage}
               </p>
-              
-              <div className="bg-gray-50 rounded-lg p-4 mb-6">
-                <h4 className="font-medium text-gray-900 mb-2">¿Qué sigue?</h4>
-                <ul className="text-sm text-gray-600 space-y-1">
-                  <li className="flex items-center">
-                    <span className="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
-                    Te notificaremos cuando Ahau lance
-                  </li>
-                  <li className="flex items-center">
-                    <span className="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
-                    Acceso temprano a funciones de personalización
-                  </li>
-                  <li className="flex items-center">
-                    <span className="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
-                    Insights exclusivos sobre estrategias de LinkedIn
-                  </li>
-                </ul>
-              </div>
-
               <button
                 onClick={() => setShowSuccessModal(false)}
                 className="w-full bg-gradient-to-r from-ahau-gold to-ahau-coral hover:from-yellow-500 hover:to-red-500 text-white font-semibold py-3 px-6 rounded-lg transition-all duration-200 transform hover:scale-105"

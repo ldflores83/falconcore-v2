@@ -59,6 +59,8 @@ api.interceptors.response.use((response) => {
   return Promise.reject(error);
 });
 
+
+
 // Interfaces para las respuestas de la API
 export interface WaitlistResponse {
   success: boolean;

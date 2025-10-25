@@ -1,14 +1,89 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Permitir acceso a las submissions del onboarding audit
-    match /onboardingaudit_submissions/{document} {
-      allow read, write: if true;
+    function isSignedIn() { 
+      return request.auth != null; 
     }
-    
-    // Regla por defecto - denegar todo lo demás
+
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+
+    function isTenantMember(tenantId) {
+      return isSignedIn() && 
+             exists(/databases/$(database)/documents/tenants/$(tenantId)/users/$(request.auth.uid));
+    }
+
+    function isTenantAdmin(tenantId) {
+      return isTenantMember(tenantId) && 
+             get(/databases/$(database)/documents/tenants/$(tenantId)/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Reglas para accounts (tenants) - mantener compatibilidad con Milestone A
+    match /accounts/{tenantId} {
+      allow read: if isSignedIn(); // Permitir lectura a usuarios autenticados
+      allow write: if false;       // Solo el backend puede escribir
+    }
+
+    // Reglas para users - mantener compatibilidad con Milestone A
+    match /users/{uid} {
+      allow read: if isSignedIn() && isOwner(uid);
+      allow write: if false; // Solo el backend puede escribir
+    }
+
+    // Nuevas reglas para tenants (estructura del Milestone B)
+    match /tenants/{tenantId} {
+      // Solo miembros del tenant pueden leer la metadata del tenant
+      allow read: if isTenantMember(tenantId);
+      // Solo admins pueden actualizar la metadata del tenant
+      allow update: if isTenantAdmin(tenantId);
+      // Solo el backend puede crear tenants
+      allow create: if false;
+    }
+
+    // Usuarios dentro de un tenant
+    match /tenants/{tenantId}/users/{uid} {
+      // Solo miembros del tenant pueden ver otros miembros
+      allow read: if isTenantMember(tenantId);
+      // Solo admins pueden crear/invitar usuarios
+      allow create: if isTenantAdmin(tenantId);
+      // Solo admins pueden actualizar roles, usuarios pueden actualizar su propio status
+      allow update: if isTenantAdmin(tenantId) || 
+                      (isOwner(uid) && resource.data.status == 'invited');
+    }
+
+    // ===== MILESTONE C: Settings del tenant =====
+    match /tenants/{tenantId}/settings/{docId} {
+      // Solo miembros del tenant pueden leer settings
+      allow read: if isTenantMember(tenantId);
+      // Solo admins pueden escribir settings
+      allow write: if isTenantAdmin(tenantId);
+    }
+
+    // ===== MILESTONE C: Members del tenant =====
+    match /tenants/{tenantId}/members/{memberId} {
+      // Solo admins pueden ver la lista de miembros
+      allow read: if isTenantAdmin(tenantId);
+      // Solo admins pueden crear/invitar miembros
+      allow create: if isTenantAdmin(tenantId);
+      // Solo admins pueden actualizar roles de miembros
+      allow update: if isTenantAdmin(tenantId);
+    }
+
+    // Drafts dentro de un tenant
+    match /tenants/{tenantId}/drafts/{draftId} {
+      // Solo miembros del tenant pueden leer/escribir drafts
+      allow read, write: if isTenantMember(tenantId);
+    }
+
+    // Reglas para admin_sessions (si se usan)
+    match /admin_sessions/{sessionId} {
+      allow read, write: if false; // Solo el backend puede acceder
+    }
+
+    // Reglas para cualquier otra colección
     match /{document=**} {
-      allow read, write: if false;
+      allow read, write: if false; // Por defecto, denegar todo
     }
   }
 } 

@@ -4,11 +4,19 @@ import express from 'express';
 import cors from 'cors';
 import * as admin from 'firebase-admin';
 
-// Importar rutas
+// Inicializar Firebase Admin PRIMERO
+if (!admin.apps.length) {
+  admin.initializeApp({
+    projectId: 'falconcore-v2'
+  });
+}
+
+// Importar rutas DESPUÉS de inicializar Firebase Admin
 import adminRoutes from './api/admin';
 import publicRoutes from './api/public';
 import authRoutes from './api/auth';
 import oauthRoutes from './oauth';
+import { ahauRouter } from './routes/ahau';
 
 const app = express();
 
@@ -16,13 +24,6 @@ const app = express();
 app.use(cors({ origin: true }));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
-
-// Inicializar Firebase Admin
-if (!admin.apps.length) {
-  admin.initializeApp({
-    projectId: 'falconcore-v2'
-  });
-}
 
 // Middleware de logging para debug
 app.use((req, res, next) => {
@@ -40,6 +41,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/public', publicRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/oauth', oauthRoutes);
+app.use('/api/ahau', ahauRouter);
 
 // Health check
 app.get('/health', (req, res) => {

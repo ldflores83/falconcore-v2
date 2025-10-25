@@ -5,7 +5,9 @@
   "main": "src/core.js",
   "type": "module",
   "scripts": {
-    "start": "node src/core.js"
+    "start": "node src/core.js",
+    "firebase:deploy:rules": "firebase deploy --only firestore:rules",
+    "deploy:ahau": "npm run build --workspace=frontends/ahau && firebase deploy --only hosting && firebase deploy --only functions:api"
   },
   "dependencies": {
     "date-fns": "^4.1.0",

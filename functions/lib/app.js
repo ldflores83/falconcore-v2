@@ -40,22 +40,23 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const admin = __importStar(require("firebase-admin"));
-// Importar rutas
-const admin_1 = __importDefault(require("./api/admin"));
-const public_1 = __importDefault(require("./api/public"));
-const auth_1 = __importDefault(require("./api/auth"));
-const oauth_1 = __importDefault(require("./oauth"));
-const app = (0, express_1.default)();
-// Middleware
-app.use((0, cors_1.default)({ origin: true }));
-app.use(express_1.default.json({ limit: '50mb' }));
-app.use(express_1.default.urlencoded({ extended: true, limit: '50mb' }));
-// Inicializar Firebase Admin
+// Inicializar Firebase Admin PRIMERO
 if (!admin.apps.length) {
     admin.initializeApp({
         projectId: 'falconcore-v2'
     });
 }
+// Importar rutas DESPUÉS de inicializar Firebase Admin
+const admin_1 = __importDefault(require("./api/admin"));
+const public_1 = __importDefault(require("./api/public"));
+const auth_1 = __importDefault(require("./api/auth"));
+const oauth_1 = __importDefault(require("./oauth"));
+const ahau_1 = require("./routes/ahau");
+const app = (0, express_1.default)();
+// Middleware
+app.use((0, cors_1.default)({ origin: true }));
+app.use(express_1.default.json({ limit: '50mb' }));
+app.use(express_1.default.urlencoded({ extended: true, limit: '50mb' }));
 // Middleware de logging para debug
 app.use((req, res, next) => {
     console.log('🚀 App.ts - Request received:', {
@@ -71,6 +72,7 @@ app.use('/api/admin', admin_1.default);
 app.use('/api/public', public_1.default);
 app.use('/api/auth', auth_1.default);
 app.use('/oauth', oauth_1.default);
+app.use('/api/ahau', ahau_1.ahauRouter);
 // Health check
 app.get('/health', (req, res) => {
     res.status(200).json({

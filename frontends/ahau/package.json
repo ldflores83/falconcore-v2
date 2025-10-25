@@ -3,14 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint",
-    "export": "next build",
+    "dev": "npx --prefix ../ next dev",
+    "build": "npx --prefix ../ next build",
+    "start": "npx --prefix ../ next start",
+    "lint": "npx --prefix ../ next lint",
+    "export": "npx --prefix ../ next build",
     "deploy": "npm run export && firebase deploy --only hosting:uaylabs"
   },
-  "dependencies": {
-    "firebase-admin": "^13.4.0"
-  }
+  "dependencies": {},
+  "devDependencies": {}
 }

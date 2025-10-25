@@ -1,160 +1,256 @@
 import React, { useState } from 'react';
-import AhauClient from '../lib/api';
+import { motion } from 'framer-motion';
+import { 
+  Mail, 
+  User, 
+  Building, 
+  Briefcase, 
+  Send, 
+  CheckCircle,
+  AlertCircle,
+  Loader
+} from 'lucide-react';
+import { useLanguage } from '../lib/useLanguage';
 
 interface WaitlistFormProps {
-  content: {
-    title: string;
-    description: string;
-    form: {
-      name: string;
-      email: string;
-      company: string;
-      role: string;
-      submit: string;
-    };
-  };
-  onSubmit: (success: boolean, message: string) => void;
+  onSubmit?: (success: boolean, message: string) => void;
 }
 
-const WaitlistForm: React.FC<WaitlistFormProps> = ({ content, onSubmit }) => {
+const WaitlistForm: React.FC<WaitlistFormProps> = ({ onSubmit }) => {
+  const { content } = useLanguage();
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     company: '',
     role: ''
   });
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [message, setMessage] = useState('');
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.email) return;
+    
+    if (!formData.email) {
+      setStatus('error');
+      setMessage('El email es requerido');
+      return;
+    }
 
-    setIsSubmitting(true);
+    setIsLoading(true);
+    setStatus('idle');
+
     try {
-      const result = await AhauClient.joinWaitlist({
-        ...formData,
-        language: 'es', // Default to Spanish, can be made dynamic
-        source: 'ahau-landing'
+      const response = await fetch('/api/waitlist', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: formData.email,
+          name: formData.name || undefined,
+          company: formData.company || undefined,
+          role: formData.role || undefined,
+          product: 'ahau'
+        }),
       });
-      
-      if (result.success) {
-        onSubmit(true, result.message);
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setStatus('success');
+        setMessage(data.message || '¡Te has unido exitosamente a la lista de espera!');
         setFormData({ name: '', email: '', company: '', role: '' });
+        onSubmit?.(true, message);
       } else {
-        onSubmit(false, result.message);
+        setStatus('error');
+        setMessage(data.error || 'Error al unirse a la lista de espera');
+        onSubmit?.(false, message);
       }
     } catch (error) {
-      console.error('Error submitting waitlist:', error);
-      onSubmit(false, 'Error submitting form. Please try again.');
+      setStatus('error');
+      setMessage('Error de conexión. Por favor, intenta de nuevo.');
+      onSubmit?.(false, message);
     } finally {
-      setIsSubmitting(false);
+      setIsLoading(false);
     }
   };
 
-  const handleInputChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-  };
-
   return (
-    <section className="py-24 relative overflow-hidden">
-      {/* Background with animated elements */}
-      <div className="absolute inset-0 bg-gradient-to-br from-ahau-blue/5 via-ahau-dark/5 to-black/5"></div>
-      <div className="absolute top-0 left-1/4 w-32 h-32 bg-ahau-gold/10 rounded-full blur-3xl animate-float"></div>
-      <div className="absolute bottom-0 right-1/4 w-40 h-40 bg-ahau-coral/10 rounded-full blur-3xl animate-float delay-1000"></div>
-      
-      <div className="relative z-10 max-w-5xl mx-auto px-4">
-        <div className="text-center mb-16">
-          <h2 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-8 leading-tight">
-            <span className="bg-gradient-to-r from-ahau-gold to-ahau-coral bg-clip-text text-transparent">
-              {content.title}
-            </span>
+    <section id="join-waitlist" className="py-20 px-4 bg-gradient-to-br from-slate-900 to-purple-900">
+      <div className="container mx-auto max-w-4xl">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+          viewport={{ once: true }}
+          className="text-center mb-12"
+        >
+          <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
+            {content.waitlist.title}
           </h2>
-          <p className="text-xl md:text-2xl text-gray-300 mb-12 max-w-3xl mx-auto leading-relaxed">
-            {content.description}
+          <p className="text-xl text-gray-300 max-w-2xl mx-auto">
+            {content.waitlist.description}
           </p>
-        </div>
-        
-        <div className="relative">
-          {/* Glowing border effect */}
-          <div className="absolute inset-0 bg-gradient-to-r from-ahau-gold/20 via-ahau-coral/20 to-ahau-gold/20 rounded-3xl blur-xl animate-glow"></div>
-          
-          <div className="relative bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-xl border border-white/20 rounded-3xl p-8 md:p-12 shadow-2xl">
-            <form onSubmit={handleSubmit} className="max-w-lg mx-auto">
-              <div className="space-y-6 mb-8">
-                <div className="relative group">
-                  <input
-                    type="text"
-                    placeholder={content.form.name}
-                    value={formData.name}
-                    onChange={(e) => handleInputChange('name', e.target.value)}
-                    className="w-full px-6 py-4 bg-white/10 border border-white/20 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:border-ahau-gold focus:bg-white/15 transition-all duration-300 backdrop-blur-sm"
-                  />
-                  <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-ahau-gold/20 to-ahau-coral/20 opacity-0 group-focus-within:opacity-100 transition-opacity duration-300 -z-10 blur-sm"></div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.2 }}
+          viewport={{ once: true }}
+          className="relative"
+        >
+          <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-3xl p-8 md:p-12">
+            {/* Status Messages */}
+            {status === 'success' && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="mb-6 p-4 bg-green-500/20 border border-green-500/30 rounded-lg flex items-center space-x-3"
+              >
+                <CheckCircle className="w-6 h-6 text-green-400 flex-shrink-0" />
+                <span className="text-green-400 font-medium">{message}</span>
+              </motion.div>
+            )}
+
+            {status === 'error' && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="mb-6 p-4 bg-red-500/20 border border-red-500/30 rounded-lg flex items-center space-x-3"
+              >
+                <AlertCircle className="w-6 h-6 text-red-400 flex-shrink-0" />
+                <span className="text-red-400 font-medium">{message}</span>
+              </motion.div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Name */}
+                <div className="space-y-2">
+                  <label htmlFor="name" className="block text-sm font-medium text-gray-300">
+                    {content.waitlist.form.name}
+                  </label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <input
+                      type="text"
+                      id="name"
+                      name="name"
+                      value={formData.name}
+                      onChange={handleInputChange}
+                      className="w-full pl-10 pr-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-300"
+                      placeholder="Tu nombre completo"
+                    />
+                  </div>
                 </div>
-                
-                <div className="relative group">
-                  <input
-                    type="email"
-                    placeholder={content.form.email}
-                    value={formData.email}
-                    onChange={(e) => handleInputChange('email', e.target.value)}
-                    required
-                    className="w-full px-6 py-4 bg-white/10 border border-white/20 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:border-ahau-gold focus:bg-white/15 transition-all duration-300 backdrop-blur-sm"
-                  />
-                  <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-ahau-gold/20 to-ahau-coral/20 opacity-0 group-focus-within:opacity-100 transition-opacity duration-300 -z-10 blur-sm"></div>
+
+                {/* Email */}
+                <div className="space-y-2">
+                  <label htmlFor="email" className="block text-sm font-medium text-gray-300">
+                    {content.waitlist.form.email} *
+                  </label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <input
+                      type="email"
+                      id="email"
+                      name="email"
+                      value={formData.email}
+                      onChange={handleInputChange}
+                      required
+                      className="w-full pl-10 pr-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-300"
+                      placeholder="tu@email.com"
+                    />
+                  </div>
                 </div>
-                
-                <div className="relative group">
-                  <input
-                    type="text"
-                    placeholder={content.form.company}
-                    value={formData.company}
-                    onChange={(e) => handleInputChange('company', e.target.value)}
-                    className="w-full px-6 py-4 bg-white/10 border border-white/20 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:border-ahau-gold focus:bg-white/15 transition-all duration-300 backdrop-blur-sm"
-                  />
-                  <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-ahau-gold/20 to-ahau-coral/20 opacity-0 group-focus-within:opacity-100 transition-opacity duration-300 -z-10 blur-sm"></div>
+
+                {/* Company */}
+                <div className="space-y-2">
+                  <label htmlFor="company" className="block text-sm font-medium text-gray-300">
+                    {content.waitlist.form.company}
+                  </label>
+                  <div className="relative">
+                    <Building className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <input
+                      type="text"
+                      id="company"
+                      name="company"
+                      value={formData.company}
+                      onChange={handleInputChange}
+                      className="w-full pl-10 pr-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-300"
+                      placeholder="Nombre de tu empresa"
+                    />
+                  </div>
                 </div>
-                
-                <div className="relative group">
-                  <input
-                    type="text"
-                    placeholder={content.form.role}
-                    value={formData.role}
-                    onChange={(e) => handleInputChange('role', e.target.value)}
-                    className="w-full px-6 py-4 bg-white/10 border border-white/20 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:border-ahau-gold focus:bg-white/15 transition-all duration-300 backdrop-blur-sm"
-                  />
-                  <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-ahau-gold/20 to-ahau-coral/20 opacity-0 group-focus-within:opacity-100 transition-opacity duration-300 -z-10 blur-sm"></div>
+
+                {/* Role */}
+                <div className="space-y-2">
+                  <label htmlFor="role" className="block text-sm font-medium text-gray-300">
+                    {content.waitlist.form.role}
+                  </label>
+                  <div className="relative">
+                    <Briefcase className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <input
+                      type="text"
+                      id="role"
+                      name="role"
+                      value={formData.role}
+                      onChange={handleInputChange}
+                      className="w-full pl-10 pr-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-300"
+                      placeholder="CEO, CMO, Director, etc."
+                    />
+                  </div>
                 </div>
               </div>
-              
-              <button
+
+              {/* Submit Button */}
+              <motion.button
                 type="submit"
-                disabled={isSubmitting}
-                className="group relative w-full px-8 py-5 bg-gradient-to-r from-ahau-gold to-yellow-400 text-ahau-dark font-bold text-lg rounded-xl shadow-2xl transform hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                disabled={isLoading}
+                className="group w-full px-8 py-4 bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-400 hover:to-blue-400 disabled:from-gray-500 disabled:to-gray-600 text-white font-semibold rounded-lg transition-all duration-300 transform hover:scale-105 disabled:scale-100 disabled:cursor-not-allowed"
+                whileHover={{ scale: isLoading ? 1 : 1.05 }}
+                whileTap={{ scale: isLoading ? 1 : 0.95 }}
               >
-                <span className="relative z-10 flex items-center justify-center">
-                  {isSubmitting ? (
+                <span className="flex items-center justify-center">
+                  {isLoading ? (
                     <>
-                      <svg className="animate-spin -ml-1 mr-3 h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      Procesando...
+                      <Loader className="w-5 h-5 mr-2 animate-spin" />
+                      Uniéndose...
                     </>
                   ) : (
                     <>
-                      {content.form.submit}
-                      <svg className="ml-2 w-5 h-5 transform group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                      </svg>
+                      <Send className="w-5 h-5 mr-2 group-hover:translate-x-1 transition-transform" />
+                      {content.waitlist.form.submit}
                     </>
                   )}
                 </span>
-                <div className="absolute inset-0 bg-gradient-to-r from-yellow-400 to-ahau-gold rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-              </button>
+              </motion.button>
             </form>
+
+            {/* Privacy Note */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              whileInView={{ opacity: 1 }}
+              transition={{ duration: 0.6, delay: 0.4 }}
+              viewport={{ once: true }}
+              className="mt-6 text-center"
+            >
+              <p className="text-sm text-gray-400">
+                {content.waitlist.privacy}
+              </p>
+            </motion.div>
           </div>
-        </div>
+        </motion.div>
       </div>
     </section>
   );
