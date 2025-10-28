@@ -1,17 +1,27 @@
 {
-  "name": "falcon-core-v2",
-  "version": "1.0.0",
-  "description": "Backend modular de Falcon Core v2 con Firestore",
-  "main": "src/core.js",
-  "type": "module",
+  "name": "falconcore-monorepo",
+  "version": "2.0.0",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
-    "start": "node src/core.js",
-    "firebase:deploy:rules": "firebase deploy --only firestore:rules",
-    "deploy:ahau": "npm run build --workspace=frontends/ahau && firebase deploy --only hosting && firebase deploy --only functions:api"
+    "dev:landing": "pnpm --filter @falconcore/landing dev",
+    "dev:ahau": "pnpm --filter @falconcore/ahau dev",
+    "dev:pulzio": "pnpm --filter @falconcore/pulzio-frontend dev",
+    "build:landing": "pnpm --filter @falconcore/landing build",
+    "build:ahau": "pnpm --filter @falconcore/ahau build",
+    "build:pulzio": "pnpm --filter @falconcore/pulzio-frontend build",
+    "build:all": "pnpm build:landing && pnpm build:ahau && pnpm build:pulzio",
+    "install:all": "pnpm install",
+    "clean": "powershell -NoProfile -Command \"Remove-Item -Path 'packages/*/node_modules','packages/*/.next','packages/*/out','node_modules' -Recurse -Force -ErrorAction SilentlyContinue\"",
+    "predeploy": "powershell -ExecutionPolicy Bypass -File .\\scripts\\build-for-hosting.ps1",
+    "deploy:hosting": "firebase deploy --only hosting",
+    "deploy:functions": "firebase deploy --only functions",
+    "deploy:all": "pnpm predeploy && firebase deploy"
   },
-  "dependencies": {
-    "date-fns": "^4.1.0",
-    "firebase-admin": "^13.4.0",
-    "node-fetch": "^3.3.2"
+  "devDependencies": {
+    "@types/node": "^20",
+    "typescript": "^5"
   }
 }

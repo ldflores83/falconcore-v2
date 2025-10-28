@@ -46,6 +46,7 @@ build/Release
 # Dependency directories
 node_modules/
 jspm_packages/
+packages/*/node_modules/
 
 # Snowpack dependency directory (https://snowpack.dev/)
 web_modules/
@@ -86,6 +87,10 @@ config/config.json
 # Next.js build output
 .next
 out
+packages/*/.next/
+packages/*/out/
+packages/*/dist/
+packages/*/build/
 
 # Nuxt.js build / generate output
 .nuxt
@@ -127,6 +132,9 @@ dist
 
 # Firebase cache directory
 .firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
 
 # TernJS port file
 .tern-port
@@ -149,6 +157,10 @@ vite.config.ts.timestamp-*
 
 # Falcon Core logs (snapshots generados)
 functions/logs_snapshots/
+packages/pulzio/backend/__pycache__/
+packages/pulzio/backend/*.pyc
+packages/pulzio/backend/venv/
+packages/pulzio/backend/.env
 
 # Claves y archivos sensibles
 *.key
@@ -159,3 +171,5 @@ functions/logs_snapshots/
 **/serviceAccount*.json
 **/firebase-adminsdk-*.json
 functions/credentials/
+functions/lib/
+functions/node_modules/
