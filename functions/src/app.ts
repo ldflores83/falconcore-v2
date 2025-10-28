@@ -12,10 +12,7 @@ if (!admin.apps.length) {
 }
 
 // Importar rutas DESPUÉS de inicializar Firebase Admin
-import adminRoutes from './api/admin';
 import publicRoutes from './api/public';
-import authRoutes from './api/auth';
-import oauthRoutes from './oauth';
 import { ahauRouter } from './routes/ahau';
 
 const app = express();
@@ -37,10 +34,7 @@ app.use((req, res, next) => {
 });
 
 // Rutas principales
-app.use('/api/admin', adminRoutes);
 app.use('/api/public', publicRoutes);
-app.use('/api/auth', authRoutes);
-app.use('/oauth', oauthRoutes);
 app.use('/api/ahau', ahauRouter);
 
 // Health check

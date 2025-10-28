@@ -1,7 +1,7 @@
 # Falcon Core V2 - Architecture
 
 ## Overview
-Falcon Core V2 is a multi-product platform built with Firebase Functions (Node.js 20) and Next.js frontends. The system supports multiple products with shared backend infrastructure.
+Falcon Core V2 is a comprehensive multi-product platform built with Firebase Functions (Node.js 20) and Next.js frontends. The system supports 6+ products with shared backend infrastructure, analytics tracking, and centralized administration.
 
 ## Security Model
 
@@ -27,11 +27,12 @@ Falcon Core V2 is a multi-product platform built with Firebase Functions (Node.j
 
 ## Products
 
-### OnboardingAudit
+### 1. OnboardingAudit
 - **Frontend**: Next.js 14.2.30 with TypeScript
 - **Backend**: Firebase Functions with Express.js
 - **Storage**: Firestore + Cloud Storage + Google Drive (admin only)
 - **Authentication**: OAuth 2.0 for admin access only
+- **Status**: ✅ Production Ready
 
 #### Security Features:
 - ✅ Form submissions isolated from OAuth credentials
@@ -46,11 +47,50 @@ Falcon Core V2 is a multi-product platform built with Firebase Functions (Node.j
 3. **Process Submissions**: Cloud Storage → Google Drive → Delete from Cloud Storage
 4. **Status Management**: Firestore updates → Delete on completion
 
-### Other Products
-- **Ignium**: Landing page with waitlist
-- **JobPulse**: Job board application
-- **PulzioHQ**: Business management tool
-- **UayLabs**: Company landing page
+### 2. Ahau (Content Copilot)
+- **Frontend**: Next.js 14.2.30 with TypeScript + Firebase Auth
+- **Backend**: Firebase Functions with comprehensive API
+- **Storage**: Firestore with tenant-based architecture
+- **Authentication**: Firebase Authentication + Tenant-based access control
+- **Status**: ✅ Milestones A, B, C, D, E Completed
+
+#### Features:
+- ✅ Multi-tenant architecture with role-based access
+- ✅ Content generation with AI integration
+- ✅ LinkedIn publishing capabilities
+- ✅ Analytics and gamification system
+- ✅ Profile management and tone customization
+- ✅ Draft management and approval workflow
+
+### 3. UayLabs (Main Landing)
+- **Frontend**: Next.js 14.2.30 with i18n (ES/EN)
+- **Backend**: Shared Firebase Functions
+- **Features**: Multi-language support, Framer Motion animations
+- **Status**: ✅ Production Ready
+
+### 4. Ignium
+- **Frontend**: Next.js 14.2.30 with waitlist functionality
+- **Backend**: Shared Firebase Functions
+- **Features**: Waitlist management, analytics tracking
+- **Status**: ✅ Production Ready
+
+### 5. JobPulse
+- **Frontend**: Next.js 14.2.30 with job board interface
+- **Backend**: Shared Firebase Functions
+- **Features**: Job posting and management
+- **Status**: ✅ Production Ready
+
+### 6. PulzioHQ
+- **Frontend**: Next.js 14.2.30 with business tools interface
+- **Backend**: Shared Firebase Functions
+- **Features**: Business management tools
+- **Status**: ✅ Production Ready
+
+### 7. LD Admin Dashboard
+- **Frontend**: Next.js 14.2.30 with centralized admin interface
+- **Backend**: Shared Firebase Functions
+- **Features**: Global analytics, product management, waitlist administration
+- **Status**: ✅ Production Ready
 
 ## Backend Architecture
 
@@ -61,10 +101,14 @@ functions/
 │   ├── api/
 │   │   ├── admin/          # Admin-only endpoints
 │   │   ├── auth/           # Authentication endpoints
-│   │   └── public/         # Public form endpoints
+│   │   ├── public/         # Public form endpoints
+│   │   └── ahau/           # Ahau-specific API endpoints
 │   ├── oauth/              # OAuth flow management
 │   ├── storage/            # Storage providers (Google Drive, etc.)
-│   └── services/           # Shared services
+│   ├── services/           # Shared services
+│   ├── middleware/         # Authentication and validation middleware
+│   ├── products/           # Product-specific helpers
+│   └── routes/             # Route definitions
 ```
 
 ### OAuth Module Structure
@@ -72,6 +116,8 @@ functions/
 functions/src/oauth/
 ├── callback.ts              # Main OAuth callback handler
 ├── saveOAuthData.ts         # Secure OAuth data persistence
+├── login.ts                 # OAuth initiation
+├── check.ts                 # Session verification
 ├── README.md                # Comprehensive module documentation
 └── providers/               # OAuth provider implementations
     ├── google.ts            # Google OAuth provider
@@ -82,11 +128,39 @@ functions/src/config/
 ```
 
 ### Key Endpoints
-- `/api/public/receiveForm` - Form submissions (NO OAuth access)
-- `/api/admin/processSubmissions` - Admin sync to Google Drive
-- `/api/admin/updateSubmissionStatus` - Status management
-- `/oauth/login` - Admin OAuth initiation
-- `/oauth/callback` - OAuth completion
+
+#### Public API (No Authentication Required)
+- `POST /api/public/receiveForm` - Form submissions (NO OAuth access)
+- `POST /api/public/uploadAsset` - File uploads
+- `POST /api/public/getUsageStatus` - Usage statistics
+- `POST /api/public/trackVisit` - Analytics tracking
+- `POST /api/public/addToWaitlist` - Waitlist registration
+
+#### Admin API (OAuth Required)
+- `POST /api/admin/processSubmissions` - Admin sync to Google Drive
+- `POST /api/admin/updateSubmissionStatus` - Status management
+- `POST /api/admin/analytics` - Product analytics
+- `POST /api/admin/waitlist` - Waitlist management
+
+#### Auth API
+- `POST /api/auth/check` - Authentication verification
+- `POST /api/auth/getClientId` - Client ID generation
+- `POST /api/auth/logout` - Session termination
+
+#### Ahau API (Firebase Auth Required)
+- `POST /api/ahau/session/verify` - Session verification
+- `POST /api/ahau/tenants.create` - Tenant creation
+- `POST /api/ahau/users.invite` - User invitation
+- `GET /api/ahau/users.list` - User listing
+- `POST /api/ahau/drafts.create` - Draft creation
+- `GET /api/ahau/drafts.list` - Draft listing
+- `POST /api/ahau/content/generate` - AI content generation
+- `POST /api/ahau/publish` - LinkedIn publishing
+
+#### OAuth Endpoints
+- `GET /oauth/login` - Admin OAuth initiation
+- `GET /oauth/callback` - OAuth completion
+- `GET /oauth/check` - Credential verification
 
 ### Storage Providers
 - **GoogleDriveProvider**: Handles Google Drive operations
@@ -100,6 +174,7 @@ functions/src/config/
 - **Styling**: Tailwind CSS
 - **Language**: TypeScript
 - **Build**: Static export for Firebase Hosting
+- **Deployment**: Firebase Hosting with custom rewrites
 
 ### Performance Optimizations
 - **Code Splitting**: Lazy loading with React.lazy
@@ -107,6 +182,28 @@ functions/src/config/
 - **Web Workers**: File processing
 - **Caching**: API response caching with debouncing
 - **Analytics**: Client-side tracking with debouncing
+- **Static Generation**: Pre-built pages for better performance
+
+### Analytics System
+- **Universal Tracking**: All frontends implement consistent analytics
+- **Debounced Requests**: 1-second debounce to prevent spam
+- **Caching**: 5-minute cache to avoid duplicate tracking
+- **Session Management**: Unique session IDs per visit
+- **Data Collected**: Page visits, user agent, screen resolution, referrer, time on page
+
+#### Analytics Implementation
+```typescript
+// Shared across all frontends
+class AnalyticsTracker {
+  private sessionId: string;
+  private projectId: string;
+  private startTime: number;
+  
+  async trackPageVisit(page: string): Promise<void>
+  async trackPageExit(): Promise<void>
+  async trackCTAClick(action: string): Promise<void>
+}
+```
 
 ### OAuth Frontend Integration
 - **Race Condition Resolution**: 100ms delay in `useEffect` to ensure URL parameter availability
@@ -114,17 +211,78 @@ functions/src/config/
 - **Authentication Flow**: Comprehensive logging for debugging and monitoring
 - **State Management**: Efficient `clientId` handling with React hooks
 
+### Multi-Product Architecture
+- **Shared Dependencies**: Common `node_modules` in `/frontends` directory
+- **Individual Builds**: Each product has its own build process
+- **Centralized Deployment**: Single Firebase hosting target with rewrites
+- **Consistent Styling**: Shared Tailwind configuration
+
+## Dependencies & Configuration
+
+### Backend Dependencies
+```json
+{
+  "dependencies": {
+    "@google-cloud/secret-manager": "^6.1.0",
+    "axios": "^1.10.0",
+    "cors": "^2.8.5",
+    "date-fns": "^4.1.0",
+    "dotenv": "^17.2.0",
+    "express": "^4.18.2",
+    "firebase-admin": "^12.0.0",
+    "firebase-functions": "^6.4.0",
+    "googleapis": "^133.0.0",
+    "undici": "^6.21.3"
+  }
+}
+```
+
+### Frontend Dependencies (Shared)
+```json
+{
+  "dependencies": {
+    "axios": "^1.6.0",
+    "firebase": "^12.1.0",
+    "firebase-admin": "^13.4.0",
+    "framer-motion": "^11.0.0",
+    "lucide-react": "^0.400.0",
+    "next": "14.2.30",
+    "react": "^18",
+    "react-dom": "^18"
+  }
+}
+```
+
+### Firebase Configuration
+- **Project ID**: `falconcore-v2`
+- **Region**: `us-central1`
+- **Runtime**: Node.js 20
+- **Secrets**: `cloud-storage-key`, `ENCRYPTION_KEY`
+- **Hosting**: Single target with multiple product rewrites
+
 ## Deployment
 
 ### Build Process
 - **Frontend**: `npm run build` → Static export
 - **Backend**: `npm run build` → TypeScript compilation
 - **Deployment**: Firebase CLI for both hosting and functions
+- **Multi-Product**: Individual builds with shared deployment
 
 ### Environment Management
 - **Secrets**: Google Cloud Secret Manager
 - **Configuration**: Environment variables per environment
 - **OAuth**: Stored in Firestore with encryption
+- **Analytics**: Real-time tracking across all products
+
+### URL Structure
+- **Main**: `https://uaylabs.web.app/`
+- **Products**: 
+  - `/ahau/` - Ahau Content Copilot
+  - `/onboardingaudit/` - Onboarding Audit
+  - `/ignium/` - Ignium Landing
+  - `/jobpulse/` - JobPulse
+  - `/pulziohq/` - PulzioHQ
+  - `/ld/` - Admin Dashboard
 
 ## Security Best Practices
 

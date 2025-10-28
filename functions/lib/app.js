@@ -47,10 +47,7 @@ if (!admin.apps.length) {
     });
 }
 // Importar rutas DESPUÉS de inicializar Firebase Admin
-const admin_1 = __importDefault(require("./api/admin"));
 const public_1 = __importDefault(require("./api/public"));
-const auth_1 = __importDefault(require("./api/auth"));
-const oauth_1 = __importDefault(require("./oauth"));
 const ahau_1 = require("./routes/ahau");
 const app = (0, express_1.default)();
 // Middleware
@@ -68,10 +65,7 @@ app.use((req, res, next) => {
     next();
 });
 // Rutas principales
-app.use('/api/admin', admin_1.default);
 app.use('/api/public', public_1.default);
-app.use('/api/auth', auth_1.default);
-app.use('/oauth', oauth_1.default);
 app.use('/api/ahau', ahau_1.ahauRouter);
 // Health check
 app.get('/health', (req, res) => {

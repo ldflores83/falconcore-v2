@@ -1,21 +1,39 @@
-/**
- * 🛠 FalconCore – Entry point principal de funciones HTTP en Firebase (v2)
- *
- * Este archivo importa la instancia de Express desde `app.ts`, que es donde
- * se montan las rutas y middlewares. Esto permite mantener limpio este entrypoint
- * y escalar la lógica del backend sin contaminar el archivo raíz.
- *
- * ✅ Firebase Functions v2
- * ✅ Región: us-central1
- * ✅ Rutas montadas: ver /src/app.ts
- */
+import * as functions from 'firebase-functions';
+import * as admin from 'firebase-admin';
+import express from 'express';
+import cors from 'cors';
 
-import { onRequest } from "firebase-functions/v2/https";
-import app from "./app"; // <-- nueva estructura modular
+// Ahau router
+import { ahauRouter } from './routes/ahau';
 
-export const api = onRequest(
-  {
-    region: "us-central1",
-  },
-  app
-);
+// Public endpoints
+import { trackVisit } from './api/public/trackVisit';
+import { addToWaitlist } from './api/public/addToWaitlist';
+
+// Initialize Firebase Admin
+admin.initializeApp();
+
+// Create Express app
+const app = express();
+
+// Middleware
+app.use(cors({ origin: true }));
+app.use(express.json());
+
+// Routes
+app.use('/api/ahau', ahauRouter);
+
+// Public routes
+app.post('/api/public/trackVisit', trackVisit);
+app.post('/api/public/addToWaitlist', addToWaitlist);
+
+// Health check
+app.get('/health', (req, res) => {
+  res.status(200).json({ 
+    status: 'healthy',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Export as Firebase Function
+export const api = functions.https.onRequest(app);

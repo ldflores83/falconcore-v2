@@ -1,243 +1,37 @@
 {
-  "hosting": [
-    {
-      "target": "uaylabs",
-      "public": "frontends/uaylabs/out",
-      "ignore": [
-        "firebase.json",
-        "**/.*",
-        "**/node_modules/**"
-      ],
-      "headers": [
-        {
-          "source": "**/*.js",
-          "headers": [
-            {
-              "key": "Content-Type",
-              "value": "application/javascript"
-            }
-          ]
-        },
-        {
-          "source": "**/*.css",
-          "headers": [
-            {
-              "key": "Content-Type",
-              "value": "text/css"
-            }
-          ]
-        },
-        {
-          "source": "/ld/_next/**",
-          "headers": [
-            {
-              "key": "Cache-Control",
-              "value": "public, max-age=31536000, immutable"
-            }
-          ]
-        },
-        {
-          "source": "/ld/_next/static/**/*.js",
-          "headers": [
-            {
-              "key": "Content-Type",
-              "value": "application/javascript"
-            },
-            {
-              "key": "Cache-Control",
-              "value": "public, max-age=31536000, immutable"
-            }
-          ]
-        },
-        {
-          "source": "/ld/_next/static/**/*.css",
-          "headers": [
-            {
-              "key": "Content-Type",
-              "value": "text/css"
-            },
-            {
-              "key": "Cache-Control",
-              "value": "public, max-age=31536000, immutable"
-            }
-          ]
-        },
-        {
-          "source": "/ahau/_next/**",
-          "headers": [
-            {
-              "key": "Cache-Control",
-              "value": "public, max-age=31536000, immutable"
-            }
-          ]
-        },
-        {
-          "source": "/ahau/_next/static/**/*.js",
-          "headers": [
-            {
-              "key": "Content-Type",
-              "value": "application/javascript"
-            },
-            {
-              "key": "Cache-Control",
-              "value": "public, max-age=31536000, immutable"
-            }
-          ]
-        },
-        {
-          "source": "/ahau/_next/static/**/*.css",
-          "headers": [
-            {
-              "key": "Content-Type",
-              "value": "text/css"
-            },
-            {
-              "key": "Cache-Control",
-              "value": "public, max-age=31536000, immutable"
-            }
-          ]
+  "hosting": {
+    "public": "public",
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "rewrites": [
+      {
+        "source": "/api/ahau/**",
+        "function": {
+          "functionId": "api",
+          "region": "us-central1"
         }
-      ],
-      "rewrites": [
-        {
-          "source": "/onboardingaudit/api/**",
-          "function": "api",
+      },
+      {
+        "source": "/api/public/**",
+        "function": {
+          "functionId": "api",
           "region": "us-central1"
-        },
-        {
-          "source": "/ignium/api/**",
-          "function": "api",
-          "region": "us-central1"
-        },
-        {
-          "source": "/jobpulse/api/**",
-          "function": "api",
-          "region": "us-central1"
-        },
-        {
-          "source": "/pulziohq/api/**",
-          "function": "api",
-          "region": "us-central1"
-        },
-        {
-          "source": "/ahau/api/**",
-          "function": "api",
-          "region": "us-central1"
-        },
-        {
-          "source": "/ignium/**",
-          "destination": "/ignium/index.html"
-        },
-        {
-          "source": "/jobpulse/**",
-          "destination": "/jobpulse/index.html"
-        },
-        {
-          "source": "/pulziohq/**",
-          "destination": "/pulziohq/index.html"
-        },
-        {
-          "source": "/ahau/login",
-          "destination": "/ahau/login/index.html"
-        },
-        {
-          "source": "/ahau/login/**",
-          "destination": "/ahau/login/index.html"
-        },
-        {
-          "source": "/ahau/dashboard",
-          "destination": "/ahau/dashboard/index.html"
-        },
-        {
-          "source": "/ahau/dashboard/**",
-          "destination": "/ahau/dashboard/index.html"
-        },
-        {
-          "source": "/ahau/**",
-          "destination": "/ahau/index.html"
-        },
-        {
-          "source": "/onboardingaudit/login",
-          "destination": "/onboardingaudit/login/index.html"
-        },
-        {
-          "source": "/onboardingaudit/login/**",
-          "destination": "/onboardingaudit/login/index.html"
-        },
-        {
-          "source": "/onboardingaudit/admin",
-          "destination": "/onboardingaudit/admin/index.html"
-        },
-        {
-          "source": "/onboardingaudit/admin/**",
-          "destination": "/onboardingaudit/admin/index.html"
-        },
-        {
-          "source": "/onboardingaudit/**",
-          "destination": "/onboardingaudit/index.html"
-        },
-        {
-          "source": "/ld/analytics",
-          "destination": "/ld/analytics/index.html"
-        },
-        {
-          "source": "/ld/analytics/",
-          "destination": "/ld/analytics/index.html"
-        },
-        {
-          "source": "/ld/products",
-          "destination": "/ld/products/index.html"
-        },
-        {
-          "source": "/ld/products/",
-          "destination": "/ld/products/index.html"
-        },
-        {
-          "source": "/ld/waitlists",
-          "destination": "/ld/waitlists/index.html"
-        },
-        {
-          "source": "/ld/waitlists/",
-          "destination": "/ld/waitlists/index.html"
-        },
-        {
-          "source": "/ld/users",
-          "destination": "/ld/users/index.html"
-        },
-        {
-          "source": "/ld/users/",
-          "destination": "/ld/users/index.html"
-        },
-        {
-          "source": "/ld/settings",
-          "destination": "/ld/settings/index.html"
-        },
-        {
-          "source": "/ld/settings/",
-          "destination": "/ld/settings/index.html"
-        },
-        {
-          "source": "/ld",
-          "destination": "/ld/index.html"
-        },
-        {
-          "source": "/ld/",
-          "destination": "/ld/index.html"
-        },
-        {
-          "source": "**",
-          "destination": "/index.html"
         }
-      ]
-    }
-  ],
+      },
+      {
+        "source": "/ahau/**",
+        "destination": "/ahau/index.html"
+      },
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  },
   "functions": {
     "source": "functions",
     "runtime": "nodejs20",
-    "secrets": ["cloud-storage-key", "ENCRYPTION_KEY"]
-  },
-  "firestore": {
-    "rules": "firestore.rules",
-    "indexes": "firestore.indexes.json"
+    "predeploy": [
+      "npm --prefix \"$RESOURCE_DIR\" run build"
+    ]
   }
 }
