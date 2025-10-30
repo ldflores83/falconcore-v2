@@ -173,3 +173,7 @@ packages/pulzio/backend/.env
 functions/credentials/
 functions/lib/
 functions/node_modules/
+
+# Database credentials (DO NOT COMMIT)
+packages/pulzio/backend/DB_CREDENTIALS.txt
+**/DB_CREDENTIALS.txt
