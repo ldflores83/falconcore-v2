@@ -13,7 +13,7 @@ https://pulzio-api-fu54nvsqfa-uc.a.run.app
 - Signals: https://pulzio-api-fu54nvsqfa-uc.a.run.app/api/signals/
 
 ## Deployment Info
-- **Deployed:** 2025-10-29 19:15:19
+- **Deployed:** 2025-10-29 19:15:37
 - **Region:** us-central1
 - **Platform:** Google Cloud Run
 - **Project:** falconcore-v2
