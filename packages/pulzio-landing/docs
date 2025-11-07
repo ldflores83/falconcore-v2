@@ -1,0 +1,397 @@
+# 🚀 PULZIO - ESTADO ACTUALIZADO
+
+**Fecha:** 6 Noviembre 2025  
+**Última sesión:** Implementación de waitlist funcional con Firebase Functions 2nd Gen
+
+---
+
+## ✅ COMPLETADO (LO QUE YA FUNCIONA EN PRODUCCIÓN)
+
+### 1. Landing Page (pulzio.web.app)
+
+**Componentes implementados en `components/landing/`:**
+
+- ✅ **Hero.tsx** - Sección principal con badge "🚀 Building in Public", headline "Stop Reactive CS. Start Revenue CS.", CTAs (Join Waitlist + Watch Demo disabled), y social proof (First 10 get $99 forever, Launch Q1 2026, Built with your feedback)
+
+- ✅ **Problem.tsx** - Sección con 4 cards de problemas: Flying Blind, Manual Hell, No ROI Proof, Tools Too Expensive
+
+- ✅ **Solution.tsx** - Sección con 6 feature cards: AI Churn Prediction, Gmail Auto-Logging, Expansion Signals, ROI Tracking, Smart Workflows, Health Scoring
+
+- ✅ **Pricing.tsx** - 3 pricing tiers (Beta $99/mo, Starter $499/mo, Pro $999/mo) con badges y CTAs
+
+- ✅ **CTA.tsx** - Formulario funcional de waitlist con honeypot, loading states, mensajes de éxito/error, y llamada directa a Firebase Function
+
+- ✅ **Footer.tsx** - Footer con 3 columnas (Brand, Product, Company), social icons, y copyright
+
+**Status:** ✅ Live en https://pulzio.web.app  
+**Tech Stack:** Next.js 15, TypeScript, TailwindCSS, shadcn/ui, lucide-react
+
+---
+
+### 2. Waitlist Backend
+
+**Features implementadas en `functions/src/index.ts`:**
+
+- ✅ **Firebase Functions 2nd Gen** - Migrado a `onRequest` de `firebase-functions/v2/https` (mejora sobre plan original)
+
+- ✅ **Rate limiting** - 5 requests/hora por IP (in-memory, resetea en cold start)
+
+- ✅ **Validación de email** - Regex validation antes de guardar
+
+- ✅ **Check de duplicados en Firestore** - Query previa para evitar emails duplicados
+
+- ✅ **Honeypot anti-bot** - Campo oculto que detecta bots automáticamente
+
+- ✅ **CORS configurado** - Built-in CORS para `pulzio.web.app` y `localhost:3000`
+
+- ✅ **Firestore security rules** - Documentadas (solo escritura via function, no directa)
+
+**Status:** ✅ Deployed y funcional  
+**Function URL:** `https://us-central1-falconcore-v2.cloudfunctions.net/addToWaitlist`  
+**Region:** us-central1  
+**Node Version:** 20
+
+---
+
+### 3. Infrastructure & DevOps
+
+- ✅ **Firebase Hosting** - Configurado para `pulzio.web.app` (site: pulzio)
+
+- ✅ **Firebase Functions** - 2nd Gen, Node 20, TypeScript
+
+- ✅ **Firestore database** - Colección `waitlist` activa
+
+- ✅ **Git monorepo** - `falcon-core-v2` workspace
+
+- ✅ **pnpm workspace** - Gestión de dependencias
+
+- ✅ **Next.js 15** - App Router, static export para Firebase Hosting
+
+- ✅ **TailwindCSS** - Configurado con shadcn/ui
+
+- ✅ **TypeScript** - Tipado completo en frontend y functions
+
+**Costos:** $0/mes (Firebase free tier)  
+**Límites actuales:**
+- Functions: 2M invocations/mes
+- Hosting: 10GB storage
+- Firestore: 1GB storage, 50K reads/día, 20K writes/día
+
+---
+
+## 🔄 EN PROGRESO
+
+**Nada actualmente en desarrollo activo**
+
+---
+
+## ⏭️ PENDIENTE (Según plan de 8 semanas)
+
+### SEMANA 1 - Restante:
+
+**Día 1:** ✅ COMPLETO
+- ✅ Landing page completa
+- ✅ Waitlist funcional
+
+**Día 2-3 (Social Media & Launch):** ⏳ PENDIENTE
+
+- ⏳ Crear cuentas sociales (@pulzio_io en Twitter, LinkedIn Company Page)
+- ⏳ First #BuildInPublic post en Twitter (thread viral)
+- ⏳ LinkedIn post de lanzamiento (500-800 palabras)
+- ⏳ Cross-links con uaylabs.web.app
+- ⏳ Juntar primeros 10 signups en waitlist
+
+**Día 4-5 (HubSpot - Fase 1):** ⏳ PENDIENTE
+
+- ⏳ HubSpot OAuth flow (backend FastAPI)
+- ⏳ Sync básico de Companies desde HubSpot
+- ⏳ API rate limiting para HubSpot
+- ⏳ Endpoints: `/api/integrations/hubspot/authorize` y `/callback`
+
+**Día 6-7 (HubSpot - Fase 2):** ⏳ PENDIENTE
+
+- ⏳ Test con cuenta real de HubSpot
+- ⏳ Error handling robusto
+- ⏳ Logging comprehensivo
+- ⏳ Background sync job
+
+---
+
+### SEMANA 2-8: RESUMEN DEL PLAN
+
+**Semana 2: Auth + Gmail**
+- Firebase Auth middleware para FastAPI
+- Gmail OAuth integration
+- Gmail Push Notifications (Pub/Sub)
+- AI email analysis con Claude
+- Auto-logging de emails
+
+**Semana 3: Slack + AI Signals**
+- Slack OAuth integration
+- Notificaciones de churn alerts
+- Expansion opportunity detection
+- Health scoring algorithm
+
+**Semana 4-5: Dashboard Frontend**
+- Next.js dashboard app
+- Company health visualization
+- Email timeline
+- Churn prediction UI
+
+**Semana 6-7: Advanced Features**
+- Custom workflows
+- ROI tracking dashboard
+- Expansion signals UI
+- Admin panel
+
+**Semana 8: Polish & Launch**
+- Testing completo
+- Performance optimization
+- Documentation
+- Beta launch
+
+---
+
+## 📊 PROGRESO VS PLAN ORIGINAL
+
+**Semana 1:**
+
+- ✅ **Día 1:** Landing + Waitlist (COMPLETO) - **100%**
+- ⏳ **Día 2-3:** Social media + Launch (PENDIENTE) - **0%**
+- ⏳ **Día 4-7:** HubSpot integration (PENDIENTE) - **0%**
+
+**Porcentaje Semana 1:** **~14% completo** (1 de 7 días)
+
+**Adelantos/Retrasos:** 
+- ⚠️ **RETRASO:** Solo se completó Día 1 de Semana 1
+- ⚠️ **PENDIENTE:** Social media setup y HubSpot integration no iniciados
+- ✅ **ADELANTO:** Waitlist backend más robusto que el plan (rate limiting, honeypot, 2nd Gen)
+
+---
+
+## 🎯 DIFERENCIAS CON EL PLAN ORIGINAL
+
+### ✅ MEJORAS implementadas (no estaban en plan):
+
+1. **Firebase Functions 2nd Gen** - Plan decía "explorar", ya está implementado y deployed
+2. **Rate limiting desde MVP** - No estaba en plan original, agregado para seguridad
+3. **Honeypot anti-bot** - No estaba en plan, implementado para prevenir spam
+4. **Next.js 15** - Plan mencionaba Next.js 14, se usó versión más reciente
+5. **CORS built-in** - Usando CORS nativo de Functions 2nd Gen (más simple que middleware)
+6. **Narrativa "Building in Public"** - Landing actualizada para reflejar pre-launch status
+
+### ⚠️ DIFERENCIAS (decisiones conscientes):
+
+1. **Sin captcha** - Decisión MVP: agregar hCaptcha después si hay spam (ahorro de costos)
+2. **Rate limiting in-memory** - Aceptable para MVP, migrar a Redis si múltiples instances
+3. **Waitlist directo a Firestore** - No hay backend FastAPI aún (solo Firebase Functions)
+4. **No backend FastAPI** - Plan asumía backend Python, actualmente solo Firebase Functions
+
+### ❌ OMISIONES (del plan original):
+
+1. **Backend FastAPI** - No existe aún (`packages/pulzio/backend/` no implementado)
+2. **PostgreSQL database** - No configurado
+3. **HubSpot integration** - No iniciada
+4. **Gmail integration** - No iniciada
+5. **Slack integration** - No iniciada
+6. **Firebase Auth middleware** - No implementado
+7. **Dashboard frontend** - No existe
+8. **AI analysis (Claude)** - No implementado
+
+---
+
+## 🔥 TECH DEBT TRACKER
+
+### 🟢 ACEPTABLE (No urgente):
+
+- ✅ Rate limiting in-memory (funciona para MVP, migrar si escala)
+- ✅ `lib/waitlist.ts` existe pero no se usa (CTA llama directo a Function) - puede eliminarse
+- ✅ No hay tests unitarios (agregar después de MVP)
+
+### 🟡 MEDIA (Antes de 50 signups):
+
+- ⚠️ **Firestore security rules** - Documentadas pero no verificadas en producción
+- ⚠️ **Error tracking** - No hay Sentry/error monitoring configurado
+- ⚠️ **Analytics** - Google Analytics mencionado en código pero no configurado
+- ⚠️ **Function URL hardcoded** - Debería ser variable de entorno
+
+### 🔴 ALTA (Antes de 100 signups o 2 semanas):
+
+- 🔴 **Backend FastAPI** - Necesario para integraciones (HubSpot, Gmail, Slack)
+- 🔴 **Database schema** - PostgreSQL no configurado
+- 🔴 **Auth system** - Firebase Auth no integrado en backend
+- 🔴 **Rate limiting persistente** - Migrar a Redis si hay múltiples function instances
+
+### 💜 FUTURE ENHANCEMENTS (Post-MVP):
+
+- 💜 Agregar hCaptcha si hay spam en waitlist
+- 💜 Migrar rate limiting a Redis (si múltiples instances)
+- 💜 Email notifications cuando se lance (SendGrid/Resend)
+- 💜 Admin dashboard para ver signups
+- 💜 A/B testing en landing page
+- 💜 Analytics dashboard (Google Analytics 4)
+
+---
+
+## 📈 MÉTRICAS ACTUALES
+
+**Producción:**
+
+- **Signups en waitlist:** [Verificar manualmente en Firestore Console → waitlist collection]
+- **URL Frontend:** https://pulzio.web.app
+- **Function URL:** https://us-central1-falconcore-v2.cloudfunctions.net/addToWaitlist
+- **Function Name:** `addToWaitlist`
+- **Function Region:** us-central1
+
+**Performance:**
+
+- **Frontend build time:** ~30-60 segundos (Next.js static export)
+- **Function deploy time:** ~2-3 minutos (TypeScript compile + deploy)
+- **Cold start estimado:** ~2-3 segundos (Functions 2nd Gen típico)
+- **Warm start:** ~100-300ms
+
+**Costos:**
+
+- **Actual:** $0/mes (Firebase free tier)
+- **Límites free tier:**
+  - Functions: 2M invocations/mes, 400K GB-seconds, 200K CPU-seconds
+  - Hosting: 10GB storage, 360MB/day transfer
+  - Firestore: 1GB storage, 50K reads/día, 20K writes/día
+
+**Estimación de escalamiento:**
+- **50 signups:** $0/mes (dentro de free tier)
+- **500 signups:** ~$5-10/mes (si hay mucho tráfico)
+- **5,000 signups:** ~$50-100/mes (necesitará Blaze plan)
+
+---
+
+## 🎯 PRÓXIMOS 3 PASOS RECOMENDADOS
+
+Basado en el plan y el estado actual:
+
+### 1. INMEDIATO (Esta semana):
+
+**Social Media Setup + First Posts**
+
+- Crear @pulzio_io en Twitter
+- Crear LinkedIn Company Page
+- Generar first #BuildInPublic thread (usar Cursor para escribir)
+- Post en LinkedIn anunciando lanzamiento
+- Cross-link desde uaylabs.web.app
+- **Objetivo:** Conseguir primeros 10 signups en waitlist
+
+**Tiempo estimado:** 2-3 horas
+
+---
+
+### 2. CORTO PLAZO (Próximos 7 días):
+
+**Setup Backend FastAPI Foundation**
+
+- Crear estructura `packages/pulzio/backend/`
+- Setup FastAPI con estructura básica
+- Configurar PostgreSQL (local + producción)
+- Firebase Auth middleware básico
+- Health check endpoint
+- **Objetivo:** Tener backend listo para integraciones
+
+**Tiempo estimado:** 4-6 horas (con Cursor Composer)
+
+---
+
+### 3. MEDIANO PLAZO (Próximas 2 semanas):
+
+**HubSpot Integration (Día 4-7 del plan)**
+
+- HubSpot OAuth flow completo
+- Sync de Companies desde HubSpot
+- API rate limiting
+- Error handling robusto
+- **Objetivo:** Tener primera integración funcional
+
+**Tiempo estimado:** 6-8 horas (con Cursor Composer)
+
+---
+
+## 📝 COMANDOS ÚTILES
+
+```bash
+# Dev local (frontend)
+cd packages/pulzio-landing
+pnpm dev
+# Abre: http://localhost:3000
+
+# Build frontend
+pnpm build
+# Genera carpeta `out/` para Firebase Hosting
+
+# Deploy frontend
+firebase deploy --only hosting
+
+# Deploy functions
+cd packages/pulzio-landing/functions
+npm install
+npm run build
+cd ..
+firebase deploy --only functions
+
+# Deploy todo
+firebase deploy
+
+# Ver logs de functions
+firebase functions:log
+
+# Ver signups en Firestore
+# Firebase Console → Firestore → waitlist collection
+# O usar Firebase CLI:
+firebase firestore:get waitlist
+
+# Emulador local (functions)
+cd functions
+npm run serve
+# Abre: http://localhost:5001
+
+# Verificar estado de deployment
+firebase hosting:sites:list
+firebase functions:list
+```
+
+---
+
+## 🔍 ARCHIVOS CLAVE DEL PROYECTO
+
+**Frontend:**
+- `app/(marketing)/page.tsx` - Landing page principal
+- `components/landing/*.tsx` - 6 componentes de landing
+- `lib/firebase.ts` - Configuración Firebase (no usado actualmente)
+- `lib/waitlist.ts` - Servicio waitlist (no usado, CTA llama directo a Function)
+
+**Backend:**
+- `functions/src/index.ts` - Firebase Function principal
+- `functions/package.json` - Dependencias de functions
+- `firebase.json` - Configuración Firebase (hosting + functions)
+
+**Config:**
+- `package.json` - Dependencias frontend
+- `next.config.ts` - Configuración Next.js
+- `tailwind.config.ts` - Configuración TailwindCSS
+
+---
+
+## 📌 NOTAS IMPORTANTES
+
+1. **`lib/waitlist.ts` no se usa** - El CTA llama directamente a la Firebase Function. Este archivo puede eliminarse o mantenerse para referencia.
+
+2. **Function URL hardcoded** - En `CTA.tsx` línea 25, la URL está hardcoded. Considerar variable de entorno.
+
+3. **No hay backend FastAPI** - El plan asumía backend Python, pero actualmente solo existe Firebase Functions. Necesario para integraciones futuras.
+
+4. **Firestore rules no verificadas** - Las reglas están documentadas pero no se ha verificado que estén aplicadas en producción.
+
+5. **Next.js 15 vs 14** - Se usó versión más reciente (mejora), pero algunas dependencias pueden necesitar actualización.
+
+---
+
+**Última actualización:** 6 Noviembre 2025  
+**Próxima revisión:** Después de completar Social Media Setup
+
