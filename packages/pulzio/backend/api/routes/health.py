@@ -1,23 +1,19 @@
 ﻿from fastapi import APIRouter
-from datetime import datetime
 
-router = APIRouter()
+router = APIRouter(prefix="/health", tags=["health"])
 
-@router.get("/health")
-def health_check():
-    return {
-        "status": "healthy",
-        "service": "pulzio-api",
-        "timestamp": datetime.utcnow().isoformat()
-    }
+
+@router.get("/")
+async def health_check():
+    return {"status": "healthy", "service": "pulzio-api"}
+
 
 @router.get("/ready")
-def readiness_check():
-    # TODO: Check database, redis connections
-    return {
-        "status": "ready",
-        "checks": {
-            "database": "ok",
-            "redis": "ok"
-        }
-    }
+async def readiness_check():
+    # TODO: Add database connection check
+    return {"status": "ready"}
+
+
+@router.get("/live")
+async def liveness_check():
+    return {"status": "alive"}

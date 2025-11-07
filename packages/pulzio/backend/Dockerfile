@@ -1,4 +1,4 @@
-﻿FROM python:3.13-slim
+﻿FROM python:3.11-slim
 
 WORKDIR /app
 
@@ -6,11 +6,11 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application
+# Copy application code
 COPY . .
 
 # Expose port
-EXPOSE 8080
+EXPOSE 8000
 
 # Run application
-CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]

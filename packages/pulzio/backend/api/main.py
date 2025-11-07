@@ -1,41 +1,53 @@
 ﻿from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from core.config import settings
-from api.routes import health, integrations, signals
+from config.settings import get_settings
+from middleware.error_handler import (
+    validation_exception_handler,
+    http_exception_handler,
+    general_exception_handler,
+)
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
+
+# Import routes
+from api.routes import health, auth, companies
+from api.routes.integrations import hubspot, gmail, slack
+
+settings = get_settings()
 
 app = FastAPI(
-    title=settings.APP_NAME,
-    version=settings.APP_VERSION,
-    description="Revenue Intelligence Platform for B2B SaaS"
+    title=settings.app_name,
+    version=settings.app_version,
+    debug=settings.debug,
 )
 
 # CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # TODO: Restrict in production
+    allow_origins=settings.allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Routes
-app.include_router(health.router, tags=["health"])
-app.include_router(
-    integrations.router,
-    prefix="/api/integrations",
-    tags=["integrations"]
-)
-app.include_router(
-    signals.router,
-    prefix="/api/signals",
-    tags=["signals"]
-)
+# Error handlers
+app.add_exception_handler(RequestValidationError, validation_exception_handler)
+app.add_exception_handler(StarletteHTTPException, http_exception_handler)
+app.add_exception_handler(Exception, general_exception_handler)
+
+# Include routers
+app.include_router(health.router)
+app.include_router(auth.router)
+app.include_router(companies.router)
+app.include_router(hubspot.router, prefix="/api/integrations")
+app.include_router(gmail.router, prefix="/api/integrations")
+app.include_router(slack.router, prefix="/api/integrations")
+
 
 @app.get("/")
-def read_root():
+async def root():
     return {
         "message": "Pulzio API",
-        "version": settings.APP_VERSION,
-        "docs": "/docs",
-        "health": "/health"
+        "version": settings.app_version,
+        "environment": settings.environment,
     }
